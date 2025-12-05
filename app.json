@@ -20,17 +20,14 @@
       "googleServicesFile": "./GoogleService-Info.plist",
       "usesAppleSignIn": true,
       "entitlements": {
-        "com.apple.developer.applesignin": [
-          "Default"
-        ]
+        "com.apple.developer.applesignin": []
       },
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses the camera to take photos of your camping trips, gear, and outdoor adventures.",
         "NSPhotoLibraryUsageDescription": "This app accesses your photo library to select and share photos of your camping experiences.",
         "NSLocationWhenInUseUsageDescription": "This app uses your location to show you nearby campgrounds, hiking trails, and points of interest.",
         "ITSAppUsesNonExemptEncryption": false
-      },
-      "appStoreId": "6752673528"
+      }
     },
     "android": {
       "edgeToEdgeEnabled": true,
