@@ -6,6 +6,8 @@ import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import * as Haptics from "expo-haptics";
 
+import { isPro } from "../utils/auth";
+import { usePaywallStore } from "../state/paywallStore";
 import { useLearningStore, LearningStep } from "../state/learningStore";
 import { RootStackParamList } from "../navigation/types";
 import {
@@ -33,6 +35,8 @@ export default function ModuleDetailScreen() {
   const navigation = useNavigation<ModuleDetailNavigationProp>();
   const route = useRoute<ModuleDetailRouteProp>();
   const { moduleId } = route.params;
+  const proStatus = isPro();
+  const { open: openPaywall } = usePaywallStore();
 
   const { getModuleById, getModuleProgress, completeStep } = useLearningStore();
   const module = getModuleById(moduleId);
@@ -45,7 +49,6 @@ export default function ModuleDetailScreen() {
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
-    // Find the first incomplete step or start at the beginning
     if (module && progress) {
       const firstIncompleteIndex = module.steps.findIndex(
         (step) => progress.steps[step.id]?.status !== "completed"
@@ -54,22 +57,12 @@ export default function ModuleDetailScreen() {
         setCurrentStepIndex(firstIncompleteIndex);
       }
     }
-  }, [moduleId]);
+  }, [moduleId, progress, module]);
 
   if (!module) {
     return (
-      <View style={{ flex: 1, backgroundColor: PARCHMENT_BACKGROUND, justifyContent: "center", alignItems: "center", paddingHorizontal: 24 }}>
-        <Text style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 18, color: TEXT_PRIMARY_STRONG, marginBottom: 8 }}>
-          Module not found
-        </Text>
-        <Pressable
-          onPress={() => navigation.goBack()}
-          style={{ marginTop: 16, paddingVertical: 12, paddingHorizontal: 24, backgroundColor: DEEP_FOREST, borderRadius: 10 }}
-        >
-          <Text style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 15, color: PARCHMENT }}>
-            Go Back
-          </Text>
-        </Pressable>
+      <View className="flex-1 justify-center items-center bg-parchment">
+        <Text>Module not found</Text>
       </View>
     );
   }
@@ -77,22 +70,31 @@ export default function ModuleDetailScreen() {
   const currentStep = module.steps[currentStepIndex];
   const isLastStep = currentStepIndex === module.steps.length - 1;
   const isStepCompleted = progress?.steps[currentStep.id]?.status === "completed";
+  const isQuizLocked = currentStep.type === "quiz" && !proStatus;
+
+  const showLockedQuizPaywall = () => {
+    openPaywall("learn_quiz", {
+      title: "Quizzes are a Pro feature",
+      subtitle: "Upgrade to test your knowledge and earn badges.",
+    });
+  };
 
   const handleNext = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    // Mark current step as complete
+    if (isQuizLocked) {
+      showLockedQuizPaywall();
+      return;
+    }
+
     if (!isStepCompleted) {
       completeStep(moduleId, currentStep.id);
     }
 
     if (isLastStep) {
-      // Module complete - show success and go back
-      Alert.alert(
-        "Module Complete! 🎉",
-        `You earned ${module.xpReward} XP. Great work!`,
-        [{ text: "Continue", onPress: () => navigation.goBack() }]
-      );
+      Alert.alert("Module Complete! 🎉", `You earned ${module.xpReward} XP.`, [
+        { text: "Continue", onPress: () => navigation.goBack() },
+      ]);
     } else {
       setCurrentStepIndex(currentStepIndex + 1);
       setShowQuizResults(false);
@@ -108,164 +110,129 @@ export default function ModuleDetailScreen() {
   };
 
   const handleQuizAnswer = (questionIndex: number, answerIndex: number) => {
+    if (isQuizLocked) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setQuizAnswers({
-      ...quizAnswers,
-      [questionIndex]: answerIndex,
-    });
+    setQuizAnswers({ ...quizAnswers, [questionIndex]: answerIndex });
   };
 
   const checkQuizAnswers = () => {
-    if (currentStep.type !== "quiz") return;
-
-    try {
-      const quizData = JSON.parse(currentStep.content);
-      const questions: QuizQuestion[] = quizData.questions;
-
-      const allAnswered = questions.every((_, index) => quizAnswers[index] !== undefined);
-      if (!allAnswered) {
-        Alert.alert("Complete the Quiz", "Please answer all questions before continuing.");
-        return;
-      }
-
-      setShowQuizResults(true);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (error) {
-      console.error("Error checking quiz answers:", error);
-    }
+    if (isQuizLocked) return;
+    setShowQuizResults(true);
   };
 
   const renderQuizContent = () => {
     if (currentStep.type !== "quiz") return null;
 
-    try {
-      const quizData = JSON.parse(currentStep.content);
-      const questions: QuizQuestion[] = quizData.questions;
-
+    if (isQuizLocked) {
       return (
-        <View style={{ gap: 24 }}>
-          {questions.map((question, qIndex) => {
-            const selectedAnswer = quizAnswers[qIndex];
-            const isCorrect = selectedAnswer === question.correctAnswer;
-
-            return (
-              <View key={qIndex} style={{ padding: 16, backgroundColor: CARD_BACKGROUND_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_SOFT }}>
-                <Text style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 16, color: TEXT_PRIMARY_STRONG, marginBottom: 12 }}>
-                  Question {qIndex + 1}: {question.question}
-                </Text>
-
-                {question.options.map((option, oIndex) => {
-                  const isSelected = selectedAnswer === oIndex;
-                  const isCorrectOption = oIndex === question.correctAnswer;
-                  const showResult = showQuizResults && isSelected;
-
-                  let backgroundColor = "rgba(255, 255, 255, 0.5)";
-                  let borderColor = BORDER_SOFT;
-                  let iconName: keyof typeof Ionicons.glyphMap | null = null;
-                  let iconColor = EARTH_GREEN;
-
-                  if (showResult) {
-                    if (isCorrect) {
-                      backgroundColor = "#f0fdf4";
-                      borderColor = "#86efac";
-                      iconName = "checkmark-circle";
-                      iconColor = "#16a34a";
-                    } else {
-                      backgroundColor = "#fef2f2";
-                      borderColor = "#fca5a5";
-                      iconName = "close-circle";
-                      iconColor = "#dc2626";
-                    }
-                  } else if (isSelected) {
-                    backgroundColor = "#eff6ff";
-                    borderColor = "#93c5fd";
-                  }
-
-                  return (
-                    <Pressable
-                      key={oIndex}
-                      onPress={() => !showQuizResults && handleQuizAnswer(qIndex, oIndex)}
-                      disabled={showQuizResults}
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        padding: 12,
-                        marginBottom: 8,
-                        backgroundColor,
-                        borderRadius: 8,
-                        borderWidth: 2,
-                        borderColor,
-                      }}
-                    >
-                      <View
-                        style={{
-                          width: 24,
-                          height: 24,
-                          borderRadius: 12,
-                          borderWidth: 2,
-                          borderColor: isSelected ? GRANITE_GOLD : BORDER_SOFT,
-                          backgroundColor: isSelected ? GRANITE_GOLD : "transparent",
-                          marginRight: 12,
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        {isSelected && (
-                          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: PARCHMENT }} />
-                        )}
-                      </View>
-                      <Text style={{ flex: 1, fontFamily: "SourceSans3_400Regular", fontSize: 15, color: TEXT_PRIMARY_STRONG }}>
-                        {option}
-                      </Text>
-                      {showResult && iconName && (
-                        <Ionicons name={iconName} size={24} color={iconColor} style={{ marginLeft: 8 }} />
-                      )}
-                    </Pressable>
-                  );
-                })}
-
-                {showQuizResults && !isCorrect && (
-                  <View style={{ marginTop: 8, padding: 12, backgroundColor: "#fef2f2", borderRadius: 8 }}>
-                    <Text style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 14, color: "#dc2626" }}>
-                      Correct answer: {question.options[question.correctAnswer]}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            );
-          })}
-
-          {!showQuizResults && (
-            <Pressable
-              onPress={checkQuizAnswers}
-              style={{
-                backgroundColor: DEEP_FOREST,
-                padding: 16,
-                borderRadius: 10,
-                alignItems: "center",
-                marginTop: 8,
-              }}
-            >
-              <Text style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 15, color: PARCHMENT }}>
-                Check Answers
-              </Text>
-            </Pressable>
-          )}
+        <View className="items-center justify-center p-8 rounded-lg bg-yellow-100/70 border border-yellow-300/70">
+          <Ionicons name="lock-closed" size={32} color="#a16207" />
+          <Text className="text-lg font-bold text-center text-yellow-900/80 mt-4">Quizzes are a Pro feature</Text>
+          <Text className="text-center text-yellow-800/80 mt-2 mb-6">
+            Upgrade to test your knowledge and earn badges.
+          </Text>
+          <Pressable
+            onPress={showLockedQuizPaywall}
+            className="bg-yellow-500 rounded-lg px-8 py-3"
+          >
+            <Text className="font-bold text-white">Unlock with Pro</Text>
+          </Pressable>
         </View>
       );
-    } catch (error) {
-      console.error("Error parsing quiz content:", error);
-      return (
-        <Text style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}>
-          Error loading quiz
-        </Text>
-      );
     }
+
+    const quizData: { questions: QuizQuestion[] } = JSON.parse(currentStep.content);
+    const quizScore = quizData.questions.reduce((acc, question, index) => {
+      return acc + (quizAnswers[index] === question.correctAnswer ? 1 : 0);
+    }, 0);
+
+    return (
+      <View>
+        <Text style={{ fontFamily: "JosefinSlab_700Bold", fontSize: 22, color: TEXT_PRIMARY_STRONG, marginBottom: 20 }}>
+          {currentStep.title}
+        </Text>
+        {quizData.questions.map((q, qIndex) => (
+          <View key={qIndex} style={{ marginBottom: 25 }}>
+            <Text style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 16, color: TEXT_PRIMARY_STRONG, marginBottom: 12 }}>
+              {q.question}
+            </Text>
+            {q.options.map((option, oIndex) => {
+              const isSelected = quizAnswers[qIndex] === oIndex;
+              const isCorrect = showQuizResults && q.correctAnswer === oIndex;
+              const isIncorrect = showQuizResults && isSelected && q.correctAnswer !== oIndex;
+
+              let borderColor = BORDER_SOFT;
+              if (isSelected) borderColor = DEEP_FOREST;
+              if (isCorrect) borderColor = "green";
+              if (isIncorrect) borderColor = "red";
+
+              return (
+                <Pressable
+                  key={oIndex}
+                  onPress={() => handleQuizAnswer(qIndex, oIndex)}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    padding: 14,
+                    borderWidth: 2,
+                    borderColor,
+                    borderRadius: 10,
+                    marginBottom: 8,
+                    backgroundColor: isSelected ? CARD_BACKGROUND_LIGHT : "transparent",
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 10,
+                      borderWidth: 2,
+                      borderColor: DEEP_FOREST,
+                      marginRight: 12,
+                      backgroundColor: isSelected ? DEEP_FOREST : "transparent",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {isSelected && <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: PARCHMENT }} />}
+                  </View>
+                  <Text style={{ flex: 1, fontFamily: "SourceSans3_400Regular", color: TEXT_PRIMARY_STRONG }}>{option}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ))}
+        {!showQuizResults && (
+          <Pressable
+            onPress={checkQuizAnswers}
+            disabled={Object.keys(quizAnswers).length !== quizData.questions.length}
+            style={{
+              backgroundColor: Object.keys(quizAnswers).length !== quizData.questions.length ? BORDER_SOFT : DEEP_FOREST,
+              paddingVertical: 14,
+              borderRadius: 10,
+              alignItems: "center",
+              marginTop: 20,
+            }}
+          >
+            <Text style={{ fontFamily: "SourceSans3_600SemiBold", color: Object.keys(quizAnswers).length !== quizData.questions.length ? TEXT_SECONDARY : PARCHMENT }}>Check Answers</Text>
+          </Pressable>
+        )}
+        {showQuizResults && (
+          <View style={{ marginTop: 20, padding: 15, borderRadius: 10, backgroundColor: CARD_BACKGROUND_LIGHT }}>
+            <Text style={{ fontFamily: "JosefinSlab_700Bold", fontSize: 20, color: DEEP_FOREST, textAlign: "center", marginBottom: 10 }}>
+              Results: {quizScore} / {quizData.questions.length} Correct
+            </Text>
+            <Text style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY, textAlign: "center" }}>
+              {quizScore === quizData.questions.length ? "Great job!" : "Keep learning and try again!"}
+            </Text>
+          </View>
+        )}
+      </View>
+    );
   };
 
   return (
     <View style={{ flex: 1, backgroundColor: PARCHMENT_BACKGROUND }}>
-      {/* Header */}
       <View
         style={{
           backgroundColor: DEEP_FOREST,
@@ -288,53 +255,10 @@ export default function ModuleDetailScreen() {
           </Text>
         </View>
       </View>
-
-      {/* Progress Bar */}
-      <View style={{ height: 4, backgroundColor: "#d1d5db" }}>
-        <View
-          style={{
-            height: 4,
-            backgroundColor: GRANITE_GOLD,
-            width: `${((currentStepIndex + 1) / module.steps.length) * 100}%`,
-          }}
-        />
-      </View>
-
-      {/* Content */}
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ padding: 20, paddingBottom: 120 }}
       >
-        {/* Step Title */}
-        <Text style={{ fontFamily: "JosefinSlab_700Bold", fontSize: 24, color: TEXT_PRIMARY_STRONG, marginBottom: 8 }}>
-          {currentStep.title}
-        </Text>
-
-        {/* Step Type Badge */}
-        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 20 }}>
-          <View
-            style={{
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              backgroundColor: currentStep.type === "quiz" ? "#fef3c7" : "#f0f9f4",
-              borderRadius: 6,
-            }}
-          >
-            <Text style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 13, color: currentStep.type === "quiz" ? "#92400e" : DEEP_FOREST }}>
-              {currentStep.type === "article" ? "Article" : currentStep.type === "quiz" ? "Quiz" : "Checklist"}
-            </Text>
-          </View>
-          {currentStep.duration && (
-            <View style={{ flexDirection: "row", alignItems: "center", marginLeft: 12 }}>
-              <Ionicons name="time-outline" size={16} color={EARTH_GREEN} />
-              <Text style={{ fontFamily: "SourceSans3_400Regular", fontSize: 14, color: TEXT_SECONDARY, marginLeft: 4 }}>
-                {currentStep.duration} min
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {/* Step Content */}
         {currentStep.type === "article" && (
           <Text style={{ fontFamily: "SourceSans3_400Regular", fontSize: 16, color: TEXT_PRIMARY_STRONG, lineHeight: 26 }}>
             {currentStep.content}
@@ -344,7 +268,6 @@ export default function ModuleDetailScreen() {
         {currentStep.type === "quiz" && renderQuizContent()}
       </ScrollView>
 
-      {/* Navigation Buttons */}
       <View
         style={{
           position: "absolute",
@@ -381,12 +304,12 @@ export default function ModuleDetailScreen() {
 
         <Pressable
           onPress={handleNext}
-          disabled={currentStep.type === "quiz" && !showQuizResults}
+          disabled={currentStep.type === "quiz" && !showQuizResults && !isQuizLocked}
           style={{
             flex: currentStepIndex === 0 ? 1 : 1,
             paddingVertical: 14,
             borderRadius: 10,
-            backgroundColor: currentStep.type === "quiz" && !showQuizResults ? BORDER_SOFT : DEEP_FOREST,
+            backgroundColor: (currentStep.type === "quiz" && !showQuizResults && !isQuizLocked) ? BORDER_SOFT : DEEP_FOREST,
             alignItems: "center",
           }}
         >
@@ -394,7 +317,7 @@ export default function ModuleDetailScreen() {
             style={{
               fontFamily: "SourceSans3_600SemiBold",
               fontSize: 15,
-              color: currentStep.type === "quiz" && !showQuizResults ? TEXT_SECONDARY : PARCHMENT,
+              color: (currentStep.type === "quiz" && !showQuizResults && !isQuizLocked) ? TEXT_SECONDARY : PARCHMENT,
             }}
           >
             {isLastStep ? "Complete Module" : "Next"}

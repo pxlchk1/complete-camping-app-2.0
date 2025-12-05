@@ -1,4 +1,4 @@
-/**
+s/**
  * Community / Connect Firestore Types
  * Based on existing Firestore collections - DO NOT rename collections
  */
@@ -58,6 +58,7 @@ export interface GearReview {
   createdAt: Timestamp | string;
   updatedAt: Timestamp | string;
   upvoteCount: number;
+  userVotes: { [key: string]: 'up' | 'down' };
   commentCount: number;
 }
 
@@ -81,6 +82,7 @@ export interface Question {
   viewCount?: number;
   lastActivityAt: Timestamp | string;
   upvotes: number;
+  userVotes: { [key: string]: 'up' | 'down' };
   hasAcceptedAnswer: boolean;
   acceptedAnswerId?: string;
 }
@@ -96,7 +98,7 @@ export interface Answer {
   createdAt: Timestamp | string;
   updatedAt: Timestamp | string;
   upvoteCount: number;
-  upvotes: number; // Alias for upvoteCount (legacy support)
+  userVotes: { [key: string]: 'up' | 'down' };
   isAccepted: boolean;
 }
 
@@ -149,6 +151,7 @@ export interface FeedbackPost {
   createdAt: Timestamp | string;
   status: FeedbackStatus;
   voteCount: number;
+  userVotes: { [key: string]: 'up' | 'down' };
   commentCount: number;
 }
 

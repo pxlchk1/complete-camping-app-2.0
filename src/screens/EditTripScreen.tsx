@@ -1,20 +1,21 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, ScrollView, TextInput, KeyboardAvoidingView, Platform, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import * as Haptics from "expo-haptics";
-import { useTripsStore } from "../state/tripsStore";
-import { Heading2, BodyText } from "../components/Typography";
+import { useTripsStore, Trip } from "../state/tripsStore";
+import { Heading2 } from "../components/Typography";
 import Button from "../components/Button";
 import AccountButton from "../components/AccountButton";
 import CalendarModal from "../components/CalendarModal";
 import { RootStackParamList } from "../navigation/types";
 import { CampingStyle } from "../types/camping";
 
-type CreateTripScreenNavigationProp = NativeStackNavigationProp<
+type EditTripScreenRouteProp = RouteProp<RootStackParamList, "EditTrip">;
+type EditTripScreenNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
-  "CreateTrip"
+  "EditTrip"
 >;
 
 const CAMPING_STYLES: { value: CampingStyle; label: string }[] = [
@@ -30,25 +31,40 @@ const CAMPING_STYLES: { value: CampingStyle; label: string }[] = [
   { value: "DISPERSED", label: "Dispersed camping" },
 ];
 
-export default function CreateTripScreen() {
-  const navigation = useNavigation<CreateTripScreenNavigationProp>();
-  const addTrip = useTripsStore((s) => s.addTrip);
+export default function EditTripScreen() {
+  const navigation = useNavigation<EditTripScreenNavigationProp>();
+  const route = useRoute<EditTripScreenRouteProp>();
+  const { tripId } = route.params;
+  const { getTripById, updateTrip } = useTripsStore();
 
+  const [trip, setTrip] = useState<Trip | null>(null);
   const [tripName, setTripName] = useState("");
   const [startDate, setStartDate] = useState(new Date());
-  const [endDate, setEndDate] = useState(new Date(Date.now() + 86400000 * 2)); // 2 days later
+  const [endDate, setEndDate] = useState(new Date());
   const [showStartDateModal, setShowStartDateModal] = useState(false);
   const [showEndDateModal, setShowEndDateModal] = useState(false);
   const [campingStyle, setCampingStyle] = useState<CampingStyle | undefined>();
   const [partySize, setPartySize] = useState("");
 
-  const handleCreate = () => {
+  useEffect(() => {
+    const existingTrip = getTripById(tripId);
+    if (existingTrip) {
+      setTrip(existingTrip);
+      setTripName(existingTrip.name);
+      setStartDate(new Date(existingTrip.startDate));
+      setEndDate(new Date(existingTrip.endDate));
+      setCampingStyle(existingTrip.campingStyle);
+      setPartySize(existingTrip.partySize ? String(existingTrip.partySize) : "");
+    }
+  }, [tripId, getTripById]);
+
+  const handleUpdate = () => {
     if (!tripName.trim()) {
       alert("Please enter a trip name");
       return;
     }
 
-    addTrip({
+    updateTrip(tripId, {
       name: tripName.trim(),
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
@@ -59,6 +75,14 @@ export default function CreateTripScreen() {
     navigation.goBack();
   };
 
+  if (!trip) {
+    return (
+      <SafeAreaView className="flex-1 bg-parchment items-center justify-center">
+        <Text>Trip not found!</Text>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView className="flex-1 bg-parchment" edges={["top"]}>
       <KeyboardAvoidingView
@@ -68,7 +92,7 @@ export default function CreateTripScreen() {
         {/* Header */}
         <View className="px-5 pt-4 pb-3 border-b border-parchmentDark">
           <View className="flex-row items-center justify-between">
-            <Heading2>Plan New Trip</Heading2>
+            <Heading2>Edit Trip</Heading2>
             <View className="flex-row items-center gap-2">
               <Pressable
                 onPress={() => navigation.goBack()}
@@ -167,8 +191,8 @@ export default function CreateTripScreen() {
 
         {/* Footer */}
         <View className="px-5 pb-5 pt-3 border-t border-parchmentDark">
-          <Button onPress={handleCreate} fullWidth icon="checkmark-circle">
-            Create Trip
+          <Button onPress={handleUpdate} fullWidth icon="checkmark-circle">
+            Save Changes
           </Button>
         </View>
       </KeyboardAvoidingView>

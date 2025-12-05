@@ -1,4 +1,4 @@
-/**
+ /**
  * My Gear Closet Screen
  * Private list of gear the user owns
  */
@@ -32,11 +32,13 @@ import {
   TEXT_SECONDARY,
   TEXT_MUTED,
 } from "../constants/colors";
+import { isPro } from "../utils/auth";
 
 type FilterOption = "all" | GearCategory;
 
 export default function MyGearClosetScreen() {
   const navigation = useNavigation<RootStackNavigationProp>();
+  const proStatus = isPro();
 
   const [gear, setGear] = useState<GearItem[]>([]);
   const [filteredGear, setFilteredGear] = useState<GearItem[]>([]);
@@ -68,16 +70,18 @@ export default function MyGearClosetScreen() {
   };
 
   useEffect(() => {
-    loadGear();
-  }, []);
+    if (proStatus) {
+      loadGear();
+    }
+  }, [proStatus]);
 
   // Reload gear when screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      if (!loading) {
+      if (!loading && proStatus) {
         loadGear();
       }
-    }, [])
+    }, [loading, proStatus])
   );
 
   const applyFilter = (gearList: GearItem[], filter: FilterOption) => {
@@ -126,12 +130,26 @@ export default function MyGearClosetScreen() {
     return GEAR_CATEGORIES.find(c => c.value === category)?.label || category;
   };
 
+  if (!proStatus) {
+    return (
+        <View className="flex-1 items-center justify-center p-8 bg-parchment">
+            <Ionicons name="lock-closed" size={48} color={TEXT_MUTED} />
+            <Text className="text-xl font-bold text-center text-primaryStrong mt-4">Store all your gear in one place with Pro. It makes packing so much easier.</Text>
+            <Pressable
+                onPress={() => navigation.navigate("Paywall")}
+                className="mt-6 bg-forest rounded-lg px-8 py-3"
+            >
+                <Text className="font-bold text-white">Unlock with Pro</Text>
+            </Pressable>
+        </View>
+    );
+  }
+
   if (loading) {
     return (
       <View className="flex-1" style={{ backgroundColor: PARCHMENT }}>
         <ModalHeader
           title="My Gear Closet"
-          showTitle
           rightAction={{
             icon: "add",
             onPress: handleAddGear,
@@ -150,7 +168,7 @@ export default function MyGearClosetScreen() {
   if (error && !auth.currentUser) {
     return (
       <View className="flex-1" style={{ backgroundColor: PARCHMENT }}>
-        <ModalHeader title="My Gear Closet" showTitle />
+        <ModalHeader title="My Gear Closet" />
         <View className="flex-1 items-center justify-center px-5">
           <Ionicons name="briefcase-outline" size={64} color={EARTH_GREEN} />
           <Text
@@ -177,7 +195,6 @@ export default function MyGearClosetScreen() {
     <View className="flex-1" style={{ backgroundColor: PARCHMENT }}>
       <ModalHeader
         title="My Gear Closet"
-        showTitle
         rightAction={{
           icon: "add",
           onPress: handleAddGear,

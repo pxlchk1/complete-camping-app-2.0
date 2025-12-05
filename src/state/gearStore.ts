@@ -1,7 +1,9 @@
 import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
+import { persist, createJSONStorage, StateStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { PackingList, GearCategory, GearItem } from "../types/camping";
+import { useProStatus } from "../utils/auth";
+import { usePaywallStore } from "./paywallStore";
 
 interface GearState {
   packingLists: PackingList[];
@@ -13,6 +15,29 @@ interface GearState {
   toggleItemPacked: (listId: string, categoryId: string, itemId: string) => void;
   getPackingProgress: (listId: string) => { packed: number; total: number; percentage: number };
 }
+
+const proStorage: StateStorage = {
+  getItem: (name) => {
+    const isPro = useProStatus.getState().isPro;
+    if (isPro) {
+      return AsyncStorage.getItem(name);
+    }
+    return null;
+  },
+  setItem: (name, value) => {
+    const isPro = useProStatus.getState().isPro;
+    if (isPro) {
+      return AsyncStorage.setItem(name, value);
+    }
+    usePaywallStore.getState().open('offline_mode', { title: 'Offline Mode is a Pro feature. Upgrade to save your data for offline use.' });
+  },
+  removeItem: (name) => {
+    const isPro = useProStatus.getState().isPro;
+    if (isPro) {
+      return AsyncStorage.removeItem(name);
+    }
+  },
+};
 
 export const useGearStore = create<GearState>()(
   persist(
@@ -99,7 +124,7 @@ export const useGearStore = create<GearState>()(
     }),
     {
       name: "gear-storage",
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => proStorage),
     }
   )
 );

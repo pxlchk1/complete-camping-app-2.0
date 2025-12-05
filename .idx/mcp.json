@@ -1,0 +1,59 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "type": "builtin",
+      "path": ".",
+      "permissions": {
+        "read": true,
+        "write": true
+      }
+    },
+
+    "terminal": {
+      "type": "builtin",
+      "permissions": {
+        "exec": true
+      }
+    },
+
+    "github": {
+      "type": "github",
+      "config": {
+        "owner": "pxlchk1",
+        "repo": "complete-camping-app-2.0"
+      }
+    },
+
+    "firestoreInspector": {
+      "type": "local",
+      "script": "tools/firestore-inspector.js",
+      "permissions": {
+        "read": true
+      }
+    },
+
+    "uxStyleGuard": {
+      "type": "local",
+      "script": "tools/ux-style-guard.js",
+      "permissions": {
+        "read": true
+      }
+    },
+
+    "errorLogAnalyzer": {
+      "type": "local",
+      "script": "tools/error-log-analyzer.js",
+      "permissions": {
+        "read": true
+      }
+    },
+
+    "codeMapGenerator": {
+      "type": "local",
+      "script": "tools/code-map-generator.js",
+      "permissions": {
+        "read": true
+      }
+    }
+  }
+}

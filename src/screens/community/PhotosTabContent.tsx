@@ -8,11 +8,15 @@ import { useToast } from "../../components/ToastManager";
 import * as ImagePicker from "expo-image-picker";
 import type { ImageCategory } from "../../types/community";
 import { DEEP_FOREST, EARTH_GREEN, GRANITE_GOLD, RIVER_ROCK, SIERRA_SKY, PARCHMENT, PARCHMENT_BORDER, CARD_BACKGROUND_LIGHT, BORDER_SOFT, TEXT_PRIMARY_STRONG, TEXT_SECONDARY, TEXT_MUTED } from "../../constants/colors";
+import { useProStatus } from "../../utils/auth";
+import { usePaywallStore } from "../../state/paywallStore";
 
 export default function PhotosTabContent() {
   const { user } = useAuthStore();
   const { showError, showSuccess } = useToast();
   const [localSearchQuery, setLocalSearchQuery] = useState("");
+  const isPro = useProStatus();
+  const { open: openPaywall } = usePaywallStore();
 
   // Use individual selectors to prevent re-render loops
   const images = useImageLibraryStore((state) => state.images);
@@ -23,6 +27,10 @@ export default function PhotosTabContent() {
   const addImage = useImageLibraryStore((state) => state.addImage);
   const voteImage = useImageLibraryStore((state) => state.voteImage);
   const setSelectedCategory = useImageLibraryStore((state) => state.setSelectedCategory);
+
+  const showPaywall = () => {
+    openPaywall("community_posting", { title: "Posting is a Pro feature. Upgrade to join the conversation." });
+  }
 
   // Filter and sort images in useMemo to prevent re-computation
   const filteredImages = useMemo(() => {
@@ -70,8 +78,8 @@ export default function PhotosTabContent() {
   }, [user]);
 
   const handleUploadPhoto = async () => {
-    if (!user) {
-      showError("Please sign in to upload photos");
+    if (!isPro) {
+      showPaywall();
       return;
     }
 
@@ -102,8 +110,8 @@ export default function PhotosTabContent() {
   };
 
   const handleVote = async (imageId: string, voteType: "up" | "down") => {
-    if (!user) {
-      showError("Please sign in to vote");
+    if (!isPro) {
+      showPaywall();
       return;
     }
 
@@ -281,6 +289,13 @@ export default function PhotosTabContent() {
           )}
         />
       )}
+        {!isPro && (
+            <View className="p-4 bg-yellow-100 border-t border-yellow-300">
+                <Text className="text-center text-yellow-800">
+                    Posting is a Pro feature. Upgrade to join the conversation.
+                </Text>
+            </View>
+        )}
     </View>
   );
 }

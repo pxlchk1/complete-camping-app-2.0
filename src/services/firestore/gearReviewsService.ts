@@ -10,81 +10,78 @@ import {
   getDoc,
   serverTimestamp,
   Timestamp,
+  runTransaction,
+  DocumentSnapshot,
+  limit,
+  startAfter,
+  where,
 } from 'firebase/firestore';
 import { db, auth } from '../../config/firebase';
-
-export interface GearReview {
-  id: string;
-  userId: string;
-  userName: string;
-  userAvatar?: string;
-  gearName: string;
-  brand: string;
-  category: string;
-  rating: number;
-  review: string;
-  pros?: string;
-  cons?: string;
-  upvotes: number;
-  createdAt: Timestamp;
-  updatedAt?: Timestamp;
-}
+import { GearReview, GearCategory } from "../../types/community";
 
 export const gearReviewsService = {
-  // Create gear review
-  async createReview(data: {
+  // Create a new gear review
+  async createGearReview(data: {
     gearName: string;
-    brand: string;
-    category: string;
+    brand?: string;
+    category: GearCategory;
     rating: number;
-    review: string;
+    summary: string;
+    body: string;
     pros?: string;
     cons?: string;
+    tags: string[];
+    authorId: string;
   }): Promise<string> {
     const user = auth.currentUser;
-    if (!user) throw new Error('Must be signed in to create a review');
+    if (!user) throw new Error('Must be signed in to create a gear review');
 
     const reviewData = {
-      userId: user.uid,
-      userName: user.displayName || 'Anonymous',
-      userAvatar: user.photoURL || null,
-      gearName: data.gearName,
-      brand: data.brand,
-      category: data.category,
-      rating: data.rating,
-      review: data.review,
-      pros: data.pros || '',
-      cons: data.cons || '',
-      upvotes: 0,
-      createdAt: serverTimestamp(),
+        ...data,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        upvoteCount: 1, // Start with 1 upvote from the creator
+        userVotes: { [user.uid]: 'up' },
+        commentCount: 0,
     };
 
     const docRef = await addDoc(collection(db, 'gearReviews'), reviewData);
     return docRef.id;
   },
 
-  // Get all gear reviews ordered by createdAt desc
-  async getReviews(): Promise<GearReview[]> {
-    const user = auth.currentUser;
-    if (!user) throw new Error('Must be signed in to read reviews');
+  // Get gear reviews with pagination
+  async getGearReviews(
+    category?: GearCategory | "all",
+    limitCount: number = 20,
+    lastDoc?: DocumentSnapshot
+  ): Promise<{ reviews: GearReview[]; lastDoc: DocumentSnapshot | null }> {
+    const reviewsRef = collection(db, "gearReviews");
 
-    const q = query(
-      collection(db, 'gearReviews'),
-      orderBy('createdAt', 'desc')
-    );
+    let q = query(reviewsRef, orderBy("createdAt", "desc"));
+
+    if (category && category !== "all") {
+        q = query(reviewsRef, where("category", "==", category), orderBy("createdAt", "desc"));
+    }
+
+    q = query(q, limit(limitCount));
+
+    if (lastDoc) {
+        q = query(q, startAfter(lastDoc));
+    }
+
     const snapshot = await getDocs(q);
-
-    return snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
+    const reviews = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
     })) as GearReview[];
+
+    const lastVisible = snapshot.docs[snapshot.docs.length - 1] || null;
+
+    return { reviews, lastDoc: lastVisible };
   },
 
-  // Get review by ID
-  async getReviewById(reviewId: string): Promise<GearReview | null> {
-    const user = auth.currentUser;
-    if (!user) throw new Error('Must be signed in to read reviews');
-
+  // Get a single gear review by ID
+  async getGearReviewById(reviewId: string): Promise<GearReview | null> {
     const docRef = doc(db, 'gearReviews', reviewId);
     const docSnap = await getDoc(docRef);
 
@@ -96,62 +93,39 @@ export const gearReviewsService = {
     } as GearReview;
   },
 
-  // Update review (only by owner)
-  async updateReview(
-    reviewId: string,
-    data: {
-      gearName?: string;
-      brand?: string;
-      category?: string;
-      rating?: number;
-      review?: string;
-      pros?: string;
-      cons?: string;
-    }
-  ): Promise<void> {
+  // Vote on a gear review
+  async voteGearReview(reviewId: string, vote: 'up' | 'down'): Promise<void> {
     const user = auth.currentUser;
-    if (!user) throw new Error('Must be signed in to update a review');
+    if (!user) throw new Error('Must be signed in to vote');
 
     const docRef = doc(db, 'gearReviews', reviewId);
-    const docSnap = await getDoc(docRef);
 
-    if (!docSnap.exists()) throw new Error('Review not found');
-    if (docSnap.data().userId !== user.uid) {
-      throw new Error('You can only edit your own reviews');
-    }
+    await runTransaction(db, async (transaction) => {
+      const docSnap = await transaction.get(docRef);
+      if (!docSnap.exists()) {
+        throw new Error('Review not found');
+      }
 
-    await updateDoc(docRef, {
-      ...data,
-      updatedAt: serverTimestamp(),
-    });
-  },
+      const data = docSnap.data();
+      const userVotes = data.userVotes || {};
+      const currentVote = userVotes[user.uid];
+      let newUpvotes = data.upvoteCount || 0;
 
-  // Delete review (admin only)
-  async deleteReview(reviewId: string): Promise<void> {
-    const user = auth.currentUser;
-    if (!user) throw new Error('Must be signed in to delete a review');
+      if (currentVote === vote) {
+        // User is undoing their vote
+        delete userVotes[user.uid];
+        newUpvotes += vote === 'up' ? -1 : 1;
+      } else if (currentVote) {
+        // User is changing their vote
+        userVotes[user.uid] = vote;
+        newUpvotes += vote === 'up' ? 2 : -2;
+      } else {
+        // User is casting a new vote
+        userVotes[user.uid] = vote;
+        newUpvotes += vote === 'up' ? 1 : -1;
+      }
 
-    const userDoc = await getDoc(doc(db, 'users', user.uid));
-    const isAdmin = userDoc.exists() && userDoc.data().role === 'admin';
-
-    if (!isAdmin) throw new Error('Only admins can delete reviews');
-
-    await deleteDoc(doc(db, 'gearReviews', reviewId));
-  },
-
-  // Upvote review
-  async upvoteReview(reviewId: string): Promise<void> {
-    const user = auth.currentUser;
-    if (!user) throw new Error('Must be signed in to upvote');
-
-    const docRef = doc(db, 'gearReviews', reviewId);
-    const docSnap = await getDoc(docRef);
-
-    if (!docSnap.exists()) throw new Error('Review not found');
-
-    const currentUpvotes = docSnap.data().upvotes || 0;
-    await updateDoc(docRef, {
-      upvotes: currentUpvotes + 1,
+      transaction.update(docRef, { upvoteCount: newUpvotes, userVotes });
     });
   },
 };

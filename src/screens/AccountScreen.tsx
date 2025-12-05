@@ -22,7 +22,6 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { useCurrentUser, useIsModerator, useIsAdministrator, useUserStore } from "../state/userStore";
-import { useIsPro } from "../state/subscriptionStore";
 import { RootStackParamList } from "../navigation/types";
 import AdminPanel from "../components/AdminPanel";
 import ModeratorPanel from "../components/ModeratorPanel";
@@ -52,7 +51,6 @@ export default function AccountScreen() {
   const currentUser = useCurrentUser();
   const isModerator = useIsModerator();
   const isAdministrator = useIsAdministrator();
-  const isPro = useIsPro();
   const updateCurrentUser = useUserStore((s) => s.updateCurrentUser);
 
   const [activeTab, setActiveTab] = useState<TabType>("posts");
@@ -163,6 +161,8 @@ export default function AccountScreen() {
     );
   }
 
+  const isPro = currentUser?.membershipTier === 'pro';
+
   const tabs: { key: TabType; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
     { key: "posts", label: "Posts", icon: "newspaper-outline" },
     { key: "about", label: "About", icon: "information-circle-outline" },
@@ -177,20 +177,7 @@ export default function AccountScreen() {
   }
 
   const getMembershipBadge = () => {
-    if (isAdministrator) {
-      return (
-        <View className="flex-row items-center px-3 py-1 rounded-full ml-2" style={{ backgroundColor: "#dc2626" }}>
-          <Ionicons name="shield-checkmark" size={14} color={PARCHMENT} />
-          <Text
-            className="text-xs ml-1"
-            style={{ fontFamily: "SourceSans3_600SemiBold", color: PARCHMENT }}
-          >
-            ADMIN
-          </Text>
-        </View>
-      );
-    }
-    if (isPro) {
+    if (currentUser?.membershipTier === "pro") {
       return (
         <View className="flex-row items-center px-3 py-1 rounded-full ml-2" style={{ backgroundColor: GRANITE_GOLD }}>
           <Ionicons name="star" size={14} color={PARCHMENT} />
@@ -203,7 +190,16 @@ export default function AccountScreen() {
         </View>
       );
     }
-    return null;
+    return (
+      <View className="flex-row items-center px-3 py-1 rounded-full ml-2 bg-neutral-200">
+        <Text
+          className="text-xs"
+          style={{ fontFamily: "SourceSans3_600SemiBold", color: DEEP_FOREST }}
+        >
+          Free User
+        </Text>
+      </View>
+    );
   };
 
   const getRoleBadge = () => {

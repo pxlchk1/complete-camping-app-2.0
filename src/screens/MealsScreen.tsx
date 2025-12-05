@@ -1,4 +1,4 @@
-/**
+s/**
  * Meals Screen - Toggle between two views
  * 1. Meal Planner - Plan meals for active trips
  * 2. Meal Ideas - Browse and add recipes to trips
@@ -29,7 +29,7 @@ import FireflyLoader from "../components/common/FireflyLoader";
 import EmptyState from "../components/EmptyState";
 import { HERO_IMAGES } from "../constants/images";
 import { DEEP_FOREST, EARTH_GREEN, PARCHMENT, TEXT_ON_DARK } from "../constants/colors";
-import { useTrips } from "../state/tripsStore";
+import { useTripsStore, useTrips } from "../state/tripsStore";
 import { RootStackParamList } from "../navigation/types";
 import { MealCategory, PrepType, MealLibraryItem } from "../types/meal";
 import * as Haptics from "expo-haptics";
@@ -63,6 +63,7 @@ export default function MealsScreen({ onTabChange }: MealsScreenProps) {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<MealsScreenNavigationProp>();
   const trips = useTrips();
+  const { getTripMeals } = useTripsStore();
 
   // Toggle state
   const [activeView, setActiveView] = useState<MealsView>("planner");
@@ -265,6 +266,11 @@ export default function MealsScreen({ onTabChange }: MealsScreenProps) {
   const renderRecipeCard = ({ item }: { item: MealLibraryItem }) => {
     const prepTypeLabel = PREP_TYPE_LABELS[item.prepType];
     const categoryLabel = CATEGORY_LABELS[item.category];
+    const isAddedToAnyTrip = activeTrips.some(trip => {
+      const tripMeals = getTripMeals(trip.id);
+      return tripMeals?.some(meal => meal.libraryId === item.id);
+    });
+
 
     return (
       <View className="bg-white rounded-xl p-4 mb-3 border border-stone-200 shadow-sm">
@@ -302,9 +308,9 @@ export default function MealsScreen({ onTabChange }: MealsScreenProps) {
 
           <Pressable
             onPress={() => activeTrips.length > 0 && handleAddToTripPress(item)}
-            disabled={activeTrips.length === 0}
+            disabled={activeTrips.length === 0 || isAddedToAnyTrip}
             className={`rounded-lg px-3 py-2 ${
-              activeTrips.length === 0
+              activeTrips.length === 0 || isAddedToAnyTrip
                 ? "bg-stone-300"
                 : "bg-forest active:opacity-80"
             }`}
@@ -313,16 +319,16 @@ export default function MealsScreen({ onTabChange }: MealsScreenProps) {
             <View className="flex-row items-center justify-center">
               <Text
                 className={`text-sm mr-1 ${
-                  activeTrips.length === 0 ? "text-stone-500" : "text-white"
+                  activeTrips.length === 0 || isAddedToAnyTrip ? "text-stone-500" : "text-white"
                 }`}
                 style={{ fontFamily: "SourceSans3_600SemiBold" }}
               >
-                Add to trip
+                {isAddedToAnyTrip ? "Added" : "Add to trip"}
               </Text>
               <Ionicons
-                name="chevron-forward"
+                name={isAddedToAnyTrip ? "checkmark" : "chevron-forward"}
                 size={14}
-                color={activeTrips.length === 0 ? "#78716c" : "white"}
+                color={activeTrips.length === 0 || isAddedToAnyTrip ? "#78716c" : "white"}
               />
             </View>
           </Pressable>

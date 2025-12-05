@@ -11,6 +11,7 @@ export type RootStackParamList = {
   FirstAid: undefined;
   MyTrips: undefined;
   CreateTrip: undefined;
+  EditTrip: { tripId: string };
   TripDetail: { tripId: string };
   Parks: undefined;
   ParksBrowse: undefined;

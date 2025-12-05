@@ -30,6 +30,8 @@ import {
   TEXT_SECONDARY,
   TEXT_MUTED,
 } from "../../constants/colors";
+import { isPro } from "../../utils/auth";
+import { usePaywallStore } from "../../state/paywallStore";
 
 type GearReviewDetailRouteProp = RouteProp<RootStackParamList, "GearReviewDetail">;
 
@@ -38,6 +40,8 @@ export default function GearReviewDetailScreen() {
   const route = useRoute<GearReviewDetailRouteProp>();
   const { reviewId } = route.params;
   const currentUser = useCurrentUser();
+  const proStatus = isPro();
+  const { open: openPaywall } = usePaywallStore();
 
   const [review, setReview] = useState<GearReview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -77,6 +81,11 @@ export default function GearReviewDetailScreen() {
     if (!currentUser) {
       Alert.alert("Sign In Required", "Please sign in to upvote reviews");
       return;
+    }
+
+    if (!proStatus) {
+        openPaywall("community_interaction", { title: "Upvoting is a Pro feature. Upgrade to join the conversation." });
+        return;
     }
 
     try {
@@ -311,7 +320,7 @@ export default function GearReviewDetailScreen() {
               }}
             >
               Tags
-            </Text>
+            </T>
             <View className="flex-row flex-wrap gap-2">
               {review.tags.map((tag) => (
                 <View

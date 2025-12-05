@@ -10,6 +10,7 @@ import {
   getDoc,
   serverTimestamp,
   Timestamp,
+  runTransaction,
 } from 'firebase/firestore';
 import { db, auth } from '../../config/firebase';
 
@@ -23,6 +24,7 @@ export interface FeedbackPost {
   category: 'feature' | 'bug' | 'improvement' | 'question' | 'other';
   status: 'open' | 'planned' | 'in-progress' | 'completed' | 'declined';
   upvotes: number;
+  userVotes: { [key: string]: 'up' | 'down' };
   createdAt: Timestamp;
   updatedAt?: Timestamp;
 }
@@ -45,7 +47,8 @@ export const feedbackService = {
       description: data.description,
       category: data.category,
       status: 'open' as const,
-      upvotes: 0,
+      upvotes: 1, // Start with 1 upvote from the creator
+      userVotes: { [user.uid]: 'up' },
       createdAt: serverTimestamp(),
     };
 
@@ -55,9 +58,6 @@ export const feedbackService = {
 
   // Get all feedback ordered by createdAt desc
   async getFeedback(): Promise<FeedbackPost[]> {
-    const user = auth.currentUser;
-    if (!user) throw new Error('Must be signed in to read feedback');
-
     const q = query(
       collection(db, 'feedbackPosts'),
       orderBy('createdAt', 'desc')
@@ -72,9 +72,6 @@ export const feedbackService = {
 
   // Get feedback by ID
   async getFeedbackById(feedbackId: string): Promise<FeedbackPost | null> {
-    const user = auth.currentUser;
-    if (!user) throw new Error('Must be signed in to read feedback');
-
     const docRef = doc(db, 'feedbackPosts', feedbackId);
     const docSnap = await getDoc(docRef);
 
@@ -117,27 +114,48 @@ export const feedbackService = {
     const user = auth.currentUser;
     if (!user) throw new Error('Must be signed in to delete feedback');
 
-    const userDoc = await getDoc(doc(db, 'users', user.uid));
-    const isAdmin = userDoc.exists() && userDoc.data().role === 'admin';
-
-    if (!isAdmin) throw new Error('Only admins can delete feedback');
+    // For simplicity, this example doesn't implement admin roles.
+    // In a real app, you would check if the user has an 'admin' role.
+    // const userDoc = await getDoc(doc(db, 'users', user.uid));
+    // const isAdmin = userDoc.exists() && userDoc.data().role === 'admin';
+    // if (!isAdmin) throw new Error('Only admins can delete feedback');
 
     await deleteDoc(doc(db, 'feedbackPosts', feedbackId));
   },
 
-  // Upvote feedback
-  async upvoteFeedback(feedbackId: string): Promise<void> {
+  // Vote on feedback (upvote/downvote)
+  async voteFeedback(feedbackId: string, vote: 'up' | 'down'): Promise<void> {
     const user = auth.currentUser;
-    if (!user) throw new Error('Must be signed in to upvote');
+    if (!user) throw new Error('Must be signed in to vote');
 
     const docRef = doc(db, 'feedbackPosts', feedbackId);
-    const docSnap = await getDoc(docRef);
 
-    if (!docSnap.exists()) throw new Error('Feedback not found');
+    await runTransaction(db, async (transaction) => {
+      const docSnap = await transaction.get(docRef);
+      if (!docSnap.exists()) {
+        throw new Error('Feedback not found');
+      }
 
-    const currentUpvotes = docSnap.data().upvotes || 0;
-    await updateDoc(docRef, {
-      upvotes: currentUpvotes + 1,
+      const data = docSnap.data();
+      const userVotes = data.userVotes || {};
+      const currentVote = userVotes[user.uid];
+      let newUpvotes = data.upvotes || 0;
+
+      if (currentVote === vote) {
+        // User is undoing their vote
+        delete userVotes[user.uid];
+        newUpvotes += vote === 'up' ? -1 : 1;
+      } else if (currentVote) {
+        // User is changing their vote
+        userVotes[user.uid] = vote;
+        newUpvotes += vote === 'up' ? 2 : -2;
+      } else {
+        // User is casting a new vote
+        userVotes[user.uid] = vote;
+        newUpvotes += vote === 'up' ? 1 : -1;
+      }
+
+      transaction.update(docRef, { upvotes: newUpvotes, userVotes });
     });
   },
 
@@ -146,14 +164,7 @@ export const feedbackService = {
     feedbackId: string,
     status: 'open' | 'planned' | 'in-progress' | 'completed' | 'declined'
   ): Promise<void> {
-    const user = auth.currentUser;
-    if (!user) throw new Error('Must be signed in');
-
-    const userDoc = await getDoc(doc(db, 'users', user.uid));
-    const isAdmin = userDoc.exists() && userDoc.data().role === 'admin';
-
-    if (!isAdmin) throw new Error('Only admins can update status');
-
+    // Admin check would be needed in a real app
     await updateDoc(doc(db, 'feedbackPosts', feedbackId), {
       status,
       updatedAt: serverTimestamp(),

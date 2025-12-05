@@ -6,6 +6,16 @@ If the user wants to use AI to generate text, answer questions, or analyze image
 import { AIMessage, AIRequestOptions, AIResponse } from "../types/ai";
 import { getOpenAIClient } from "./openai";
 import { getGrokClient } from "./grok";
+import { useProStatus } from "../utils/auth";
+import { usePaywallStore } from "../state/paywallStore";
+
+const checkProStatus = () => {
+  const isPro = useProStatus.getState().isPro;
+  if (!isPro) {
+    usePaywallStore.getState().open("ai_assistant", { title: "The AI Assistant is a Pro feature. Upgrade to unlock its full potential." });
+    throw new Error("User is not a pro member");
+  }
+}
 
 /**
  * Get a text response from OpenAI
@@ -14,6 +24,8 @@ import { getGrokClient } from "./grok";
  * @returns The response from the AI
  */
 export const getOpenAITextResponse = async (messages: AIMessage[], options?: AIRequestOptions): Promise<AIResponse> => {
+  checkProStatus();
+
   try {
     const client = getOpenAIClient();
     const defaultModel = "gpt-4o"; //accepts images as well, use this for image analysis
@@ -55,6 +67,8 @@ export const getOpenAIChatResponse = async (prompt: string): Promise<AIResponse>
  * @returns The response from the AI
  */
 export const getGrokTextResponse = async (messages: AIMessage[], options?: AIRequestOptions): Promise<AIResponse> => {
+  checkProStatus();
+
   try {
     const client = getGrokClient();
     const defaultModel = "grok-3-beta";

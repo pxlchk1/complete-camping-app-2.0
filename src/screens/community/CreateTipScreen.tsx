@@ -1,9 +1,4 @@
-/**
- * Create Tip Screen
- * Form for creating a new camping tip
- */
-
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -22,9 +17,10 @@ import * as Haptics from "expo-haptics";
 import { tipsService } from "../../services/firestore/tipsService";
 import { auth } from "../../config/firebase";
 import { RootStackNavigationProp } from "../../navigation/types";
+import { useProStatus } from "../../utils/auth";
+import { usePaywallStore } from "../../state/paywallStore";
 import {
   DEEP_FOREST,
-  EARTH_GREEN,
   PARCHMENT,
   CARD_BACKGROUND_LIGHT,
   BORDER_SOFT,
@@ -47,31 +43,40 @@ const CATEGORIES = [
 export default function CreateTipScreen() {
   const navigation = useNavigation<RootStackNavigationProp>();
   const currentUser = auth.currentUser;
+  const isPro = useProStatus();
+  const { open: openPaywall } = usePaywallStore();
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [category, setCategory] = useState("Other");
   const [submitting, setSubmitting] = useState(false);
 
+  useEffect(() => {
+    if (!isPro) {
+      openPaywall("community_posting", { title: "Posting is a Pro feature. Upgrade to join the conversation." });
+      navigation.goBack();
+    }
+  }, [isPro, navigation, openPaywall]);
+
   const handleSubmit = async () => {
+    if (!isPro) {
+        openPaywall("community_posting", { title: "Posting is a Pro feature. Upgrade to join the conversation." });
+        return;
+    }
+
     if (!currentUser) {
       Alert.alert("Error", "Please sign in to create tips");
       return;
     }
 
-    if (!title.trim()) {
-      Alert.alert("Missing Title", "Please enter a title for your tip");
-      return;
-    }
-
-    if (!content.trim()) {
-      Alert.alert("Missing Content", "Please enter the tip content");
+    if (!title.trim() || !content.trim()) {
+      Alert.alert("Missing Information", "Please fill out all required fields.");
       return;
     }
 
     try {
       setSubmitting(true);
-      const tipId = await tipsService.createTip({
+      await tipsService.createTip({
         title: title.trim(),
         content: content.trim(),
         category,
@@ -84,6 +89,16 @@ export default function CreateTipScreen() {
       setSubmitting(false);
     }
   };
+  
+  const isFormValid = title.trim() && content.trim();
+
+  if (!isPro) {
+    return (
+        <View className="flex-1 justify-center items-center bg-parchment">
+            <ActivityIndicator color={DEEP_FOREST} />
+        </View>
+    )
+  }
 
   return (
     <View className="flex-1 bg-parchment">
@@ -92,7 +107,8 @@ export default function CreateTipScreen() {
         showTitle
         rightAction={{
           icon: "checkmark",
-          onPress: handleSubmit
+          onPress: handleSubmit,
+          disabled: submitting || !isFormValid
         }}
       />
       <KeyboardAvoidingView
@@ -123,9 +139,6 @@ export default function CreateTipScreen() {
               }}
               maxLength={100}
             />
-            <Text className="text-xs mt-1" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED }}>
-              {title.length}/100
-            </Text>
           </View>
 
           {/* Body */}
@@ -155,9 +168,6 @@ export default function CreateTipScreen() {
               }}
               maxLength={500}
             />
-            <Text className="text-xs mt-1" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED }}>
-              {content.length}/500
-            </Text>
           </View>
 
           {/* Category */}
@@ -195,16 +205,16 @@ export default function CreateTipScreen() {
           {/* Submit Button */}
           <Pressable
             onPress={handleSubmit}
-            disabled={submitting || !title.trim() || !content.trim()}
+            disabled={submitting || !isFormValid}
             className="py-4 rounded-xl items-center mt-6 active:opacity-90"
             style={{
-              backgroundColor: title.trim() && content.trim() ? DEEP_FOREST : BORDER_SOFT,
+              backgroundColor: isFormValid ? DEEP_FOREST : BORDER_SOFT,
             }}
           >
             {submitting ? (
               <ActivityIndicator size="small" color={PARCHMENT} />
             ) : (
-              <Text style={{ fontFamily: "SourceSans3_600SemiBold", color: PARCHMENT }}>
+              <Text style={{ fontFamily: "SourceSans3_600SemiBold", color: PARCHMENT, opacity: isFormValid ? 1 : 0.5 }}>
                 Share Tip
               </Text>
             )}

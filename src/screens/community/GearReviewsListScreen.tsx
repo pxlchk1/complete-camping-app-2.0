@@ -12,16 +12,19 @@ import {
   TextInput,
   ActivityIndicator,
   RefreshControl,
+  Image,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { DocumentSnapshot } from "firebase/firestore";
 import * as Haptics from "expo-haptics";
-import { getGearReviews } from "../../services/gearReviewsService";
-import { GearReview, GearCategory } from "../../types/community";
+import { gearReviewsService, GearReview } from "../../services/firestore/gearReviewsService";
+import { GearCategory } from "../../types/community";
 import { RootStackNavigationProp } from "../../navigation/types";
 import { useCurrentUser } from "../../state/userStore";
 import CommunitySectionHeader from "../../components/CommunitySectionHeader";
+import { profileService } from "../../services/firestore/profileService";
+import { User } from "../../types/user";
 import {
   DEEP_FOREST,
   EARTH_GREEN,
@@ -62,6 +65,14 @@ export default function GearReviewsListScreen() {
   const [error, setError] = useState<string | null>(null);
   const [lastDoc, setLastDoc] = useState<DocumentSnapshot | null>(null);
   const [hasMore, setHasMore] = useState(true);
+  const [hiddenPosts, setHiddenPosts] = useState<string[]>([]);
+  const [authorDetails, setAuthorDetails] = useState<Record<string, User>>({});
+
+  const toggleVisibility = (postId: string) => {
+    setHiddenPosts(prev => 
+      prev.includes(postId) ? prev.filter(id => id !== postId) : [...prev, postId]
+    );
+  };
 
   const toDateString = (date: any): string => {
     if (typeof date === "string") return date;
@@ -93,26 +104,63 @@ export default function GearReviewsListScreen() {
         setError(null);
       }
 
-      const result = await getGearReviews(
+      const result = await gearReviewsService.getGearReviews(
         category === "all" ? "all" : category,
         20,
         refresh ? undefined : lastDoc || undefined
       );
 
+      let allReviews: GearReview[];
       if (refresh) {
-        setReviews(result.reviews);
+        allReviews = result.reviews;
       } else {
-        setReviews((prev) => [...prev, ...result.reviews]);
+        allReviews = [...reviews, ...result.reviews];
       }
+      setReviews(allReviews);
 
       setLastDoc(result.lastDoc);
       setHasMore(result.reviews.length === 20);
+
+      const authorIds = [...new Set(allReviews.map(p => p.authorId))];
+      const profiles = await profileService.getMultipleUserProfiles(authorIds);
+      setAuthorDetails(profiles);
+
     } catch (err: any) {
       setError(err.message || "Failed to load gear reviews");
     } finally {
       setLoading(false);
       setLoadingMore(false);
       setRefreshing(false);
+    }
+  };
+
+  const handleVote = async (postId: string, type: 'up' | 'down') => {
+    if (!currentUser) return;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      await gearReviewsService.voteGearReview(postId, type);
+      setReviews(prev =>
+        prev.map(p => {
+          if (p.id === postId) {
+            const currentVote = p.userVotes && p.userVotes[currentUser.id];
+            let newUpvotes = p.upvoteCount;
+
+            if (currentVote === type) { 
+              newUpvotes = type === 'up' ? p.upvoteCount - 1 : p.upvoteCount + 1;
+            } else if (currentVote) { 
+              newUpvotes = type === 'up' ? p.upvoteCount + 2 : p.upvoteCount - 2;
+            } else { 
+              newUpvotes = type === 'up' ? p.upvoteCount + 1 : p.upvoteCount - 1;
+            }
+            
+            return { ...p, upvoteCount: newUpvotes };
+          }
+          return p;
+        })
+      );
+    } catch (err) {
+      loadReviews(); 
     }
   };
 
@@ -157,7 +205,12 @@ export default function GearReviewsListScreen() {
     }
   }, [searchQuery, reviews]);
 
-  const renderReviewItem = ({ item }: { item: GearReview }) => (
+  const renderReviewItem = ({ item }: { item: GearReview }) => {
+    const userVote = currentUser && item.userVotes ? item.userVotes[currentUser.id] : null;
+    const isHidden = item.upvoteCount <= -5 && !hiddenPosts.includes(item.id);
+    const author = authorDetails[item.authorId];
+
+    return (
     <Pressable
       onPress={() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -204,19 +257,26 @@ export default function GearReviewsListScreen() {
         </View>
       </View>
 
-      <Text
-        className="mb-2"
-        style={{
-          fontFamily: "SourceSans3_400Regular",
-          color: TEXT_SECONDARY,
-          lineHeight: 20,
-        }}
-        numberOfLines={2}
-      >
-        {item.summary}
-      </Text>
+      {isHidden ? (
+          <Pressable onPress={() => toggleVisibility(item.id)} className="py-4 items-center bg-gray-100 rounded-md">
+            <Text style={{ fontFamily: "SourceSans3_600SemiBold", color: TEXT_SECONDARY }}>Content hidden due to downvotes</Text>
+            <Text style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED, marginTop: 4 }}>Tap to show</Text>
+          </Pressable>
+        ) : (
+        <Text
+          className="mb-2"
+          style={{
+            fontFamily: "SourceSans3_400Regular",
+            color: TEXT_SECONDARY,
+            lineHeight: 20,
+          }}
+          numberOfLines={2}
+        >
+          {item.summary}
+        </Text>
+      )}
 
-      {item.tags && item.tags.length > 0 && (
+      {item.tags && item.tags.length > 0 && !isHidden && (
         <View className="flex-row flex-wrap gap-2 mb-2">
           {item.tags.slice(0, 3).map((tag) => (
             <View
@@ -236,24 +296,51 @@ export default function GearReviewsListScreen() {
       )}
 
       <View className="flex-row items-center justify-between">
-        <Text
-          className="text-xs"
-          style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED }}
-        >
-          {formatTimeAgo(toDateString(item.createdAt))}
-        </Text>
         <View className="flex-row items-center">
-          <Ionicons name="arrow-up" size={14} color={TEXT_MUTED} />
+          <Image source={{ uri: author?.photoURL }} className="w-6 h-6 rounded-full mr-2" />
           <Text
-            className="ml-1 text-xs"
-            style={{ fontFamily: "SourceSans3_600SemiBold", color: TEXT_MUTED }}
+            className="text-xs"
+            style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED }}
           >
-            {item.upvoteCount || 0}
+            @{author?.handle} • {formatTimeAgo(toDateString(item.createdAt))}
           </Text>
         </View>
+        <View className="flex-row items-center">
+            <Pressable
+              onPress={(e) => {
+                e.stopPropagation();
+                handleVote(item.id, 'up');
+              }}
+              className="px-2 py-1"
+            >
+              <Ionicons 
+                name={userVote === 'up' ? "arrow-up-circle" : "arrow-up-circle-outline"} 
+                size={20} 
+                color={userVote === 'up' ? EARTH_GREEN : TEXT_MUTED} 
+              />
+            </Pressable>
+            
+            <Text style={{ fontFamily: "SourceSans3_600SemiBold", color: TEXT_PRIMARY_STRONG, minWidth: 20, textAlign: 'center' }}>
+              {item.upvoteCount}
+            </Text>
+
+            <Pressable
+              onPress={(e) => {
+                e.stopPropagation();
+                handleVote(item.id, 'down');
+              }}
+              className="px-2 py-1"
+            >
+              <Ionicons 
+                name={userVote === 'down' ? "arrow-down-circle" : "arrow-down-circle-outline"} 
+                size={20} 
+                color={userVote === 'down' ? '#ef4444' : TEXT_MUTED} 
+              />
+            </Pressable>
+          </View>
       </View>
     </Pressable>
-  );
+  )};
 
   const renderEmptyState = () => {
     if (loading) return null;
@@ -343,7 +430,6 @@ export default function GearReviewsListScreen() {
           if (currentUser) {
             navigation.navigate("CreateGearReview");
           }
-          // TODO: Show auth dialog if no user
         }}
       />
 

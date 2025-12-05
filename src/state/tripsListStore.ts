@@ -1,7 +1,9 @@
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { createJSONStorage, persist, StateStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { CampingStyleValue } from "../types/camping";
+import { useProStatus } from "../utils/auth";
+import { usePaywallStore } from "./paywallStore";
 
 export type TripSegment = "active" | "completed" | "all";
 export type TripSort = "startSoonest" | "updatedRecent" | "az";
@@ -34,6 +36,29 @@ const initialFilters: TripsFilter = {
   states: [],
 };
 
+const proStorage: StateStorage = {
+  getItem: (name) => {
+    const isPro = useProStatus.getState().isPro;
+    if (isPro) {
+      return AsyncStorage.getItem(name);
+    }
+    return null;
+  },
+  setItem: (name, value) => {
+    const isPro = useProStatus.getState().isPro;
+    if (isPro) {
+      return AsyncStorage.setItem(name, value);
+    }
+    usePaywallStore.getState().open('offline_mode', { title: 'Offline Mode is a Pro feature. Upgrade to save your data for offline use.' });
+  },
+  removeItem: (name) => {
+    const isPro = useProStatus.getState().isPro;
+    if (isPro) {
+      return AsyncStorage.removeItem(name);
+    }
+  },
+};
+
 export const useTripsListStore = create<TripsListState>()(
   persist(
     (set, get) => ({
@@ -61,7 +86,7 @@ export const useTripsListStore = create<TripsListState>()(
     }),
     {
       name: "trips-list-prefs",
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => proStorage),
       partialize: (s) => ({
         segment: s.segment,
         sortBy: s.sortBy,

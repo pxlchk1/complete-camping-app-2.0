@@ -33,10 +33,12 @@ import {
   TEXT_SECONDARY,
   TEXT_MUTED,
 } from "../constants/colors";
+import { isPro } from "../utils/auth";
 
 export default function MyCampgroundScreen() {
   const navigation = useNavigation<RootStackNavigationProp>();
   const insets = useSafeAreaInsets();
+    const proStatus = isPro();
 
   const [contacts, setContacts] = useState<CampgroundContact[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,16 +67,18 @@ export default function MyCampgroundScreen() {
   };
 
   useEffect(() => {
-    loadContacts();
-  }, []);
+    if (proStatus) {
+      loadContacts();
+    }
+  }, [proStatus]);
 
   // Reload contacts when screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      if (!loading) {
+      if (!loading && proStatus) {
         loadContacts();
       }
-    }, [])
+    }, [loading, proStatus])
   );
 
   const handleRefresh = () => {
@@ -115,10 +119,25 @@ export default function MyCampgroundScreen() {
     );
   };
 
+  if (!proStatus) {
+    return (
+        <View className="flex-1 items-center justify-center p-8 bg-parchment">
+            <Ionicons name="lock-closed" size={48} color={TEXT_MUTED} />
+            <Text className="text-xl font-bold text-center text-primaryStrong mt-4">This is where you will keep your camping crew. Pro unlocks your campground.</Text>
+            <Pressable
+                onPress={() => navigation.navigate("Paywall")}
+                className="mt-6 bg-forest rounded-lg px-8 py-3"
+            >
+                <Text className="font-bold text-white">Unlock with Pro</Text>
+            </Pressable>
+        </View>
+    );
+}
+
   if (loading) {
     return (
       <View className="flex-1" style={{ backgroundColor: PARCHMENT }}>
-        <ModalHeader title="My Campground" showTitle />
+        <ModalHeader title="My Campground" />
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color={DEEP_FOREST} />
           <Text className="mt-4" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}>
@@ -132,7 +151,7 @@ export default function MyCampgroundScreen() {
   if (error && !auth.currentUser) {
     return (
       <View className="flex-1" style={{ backgroundColor: PARCHMENT }}>
-        <ModalHeader title="My Campground" showTitle />
+        <ModalHeader title="My Campground" />
         <View className="flex-1 items-center justify-center px-5">
           <Ionicons name="people-outline" size={64} color={EARTH_GREEN} />
           <Text
@@ -157,7 +176,7 @@ export default function MyCampgroundScreen() {
 
   return (
     <View className="flex-1" style={{ backgroundColor: PARCHMENT }}>
-      <ModalHeader title="My Campground" showTitle />
+      <ModalHeader title="My Campground" />
 
       <ScrollView
         className="flex-1"

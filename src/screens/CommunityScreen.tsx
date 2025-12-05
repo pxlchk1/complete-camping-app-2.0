@@ -20,7 +20,7 @@ import { useGearReviewStore, useGearReviews, useGearReviewsLoading } from "../st
 import { useAuthStore } from "../state/authStore";
 import { usePaywallStore } from "../state/paywallStore";
 import { useToast } from "../components/ToastManager";
-import { useUserType } from "../utils/userType";
+import { useProStatus } from "../utils/auth";
 import { getFeedbackPosts, type FeedbackPost } from "../api/feedback-service";
 
 // Constants
@@ -72,7 +72,7 @@ export default function CommunityScreen() {
   const { showError } = useToast();
   const { user } = useAuthStore();
   const { open: openPaywall } = usePaywallStore();
-  const userType = useUserType();
+  const isPro = useProStatus();
 
   // Sync tips from Firebase when the tips tab is focused
   useEffect(() => {
@@ -91,14 +91,13 @@ export default function CommunityScreen() {
   // Calculate bottom padding
   const bottomSpacer = 50 + Math.max(insets.bottom, 18) + 12;
 
-  // Gate tip submission
-  const handleSubmitTip = () => {
-    if (userType === "guest" || userType === "free") {
-      openPaywall("community_full", { name: "Community" });
-      return;
-    }
-    setTipSubmissionVisible(true);
-  };
+    const handleProFeature = () => {
+        if (!isPro) {
+            openPaywall("community_full", { name: "Community" });
+            return false;
+        }
+        return true;
+    };
 
   const formatTimeAgo = (dateString: string) => {
     const now = new Date();
@@ -149,11 +148,7 @@ export default function CommunityScreen() {
   };
 
   const handleFeedbackVote = async (postId: string, voteType: "up" | "down") => {
-    if (!user) {
-      showError("Please sign in");
-      return;
-    }
-    // Voting not implemented in this schema
+    if (!handleProFeature()) return;
     showError("Voting coming soon");
   };
 
@@ -179,7 +174,7 @@ export default function CommunityScreen() {
           </Text>
           {user && (
             <Pressable
-              onPress={handleSubmitTip}
+              onPress={() => handleProFeature() && setTipSubmissionVisible(true)}
               className="ml-3 active:opacity-70"
             >
               <Ionicons name="add-circle" size={28} color={PARCHMENT} />
@@ -219,7 +214,7 @@ export default function CommunityScreen() {
             Be the first to share a helpful camping tip!
           </Text>
           <Pressable
-            onPress={handleSubmitTip}
+            onPress={() => handleProFeature() && setTipSubmissionVisible(true)}
             className="bg-forest-800 rounded-xl px-6 py-3"
           >
             <Text style={{ fontFamily: "SourceSans3_600SemiBold", color: TEXT_ON_DARK }}>Submit Your First Tip</Text>
@@ -241,8 +236,10 @@ export default function CommunityScreen() {
                 <View className="flex-1">
                   <View className="flex-row items-center justify-between mb-2">
                     <View className="flex-row items-center">
-                      <Ionicons name="heart" size={14} color="#dc2626" />
-                      <Text className="text-sm ml-1" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED }}>{tip.likesCount || 0}</Text>
+                        <Pressable onPress={() => handleProFeature()} className="flex-row items-center">
+                            <Ionicons name="heart" size={14} color="#dc2626" />
+                            <Text className="text-sm ml-1" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED }}>{tip.likesCount || 0}</Text>
+                        </Pressable>
                     </View>
                   </View>
                   <Text className="leading-5 mb-2" numberOfLines={5} style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}>
@@ -270,6 +267,12 @@ export default function CommunityScreen() {
             <Text className="text-xl font-bold text-parchment" style={{ fontFamily: "JosefinSlab_700Bold" }}>
               Feedback
             </Text>
+            <Pressable
+              onPress={() => handleProFeature() && navigation.navigate("SubmitFeedback")}
+              className="ml-3 active:opacity-70"
+            >
+              <Ionicons name="add-circle" size={28} color={PARCHMENT} />
+            </Pressable>
           </View>
         </View>
 
@@ -333,6 +336,13 @@ export default function CommunityScreen() {
               ))}
             </View>
           )}
+           {!isPro && (
+                <View className="mt-4 p-4 rounded-lg bg-yellow-100 border border-yellow-300">
+                    <Text className="text-center text-yellow-800">
+                        Posting is a Pro feature. Upgrade to join the conversation.
+                    </Text>
+                </View>
+            )}
         </View>
       </View>
     );
@@ -347,6 +357,12 @@ export default function CommunityScreen() {
             <Text className="text-xl font-bold text-parchment" style={{ fontFamily: "JosefinSlab_700Bold" }}>
               Gear Reviews
             </Text>
+             <Pressable
+                onPress={() => handleProFeature() && navigation.navigate("SubmitGearReview")}
+                className="ml-3 active:opacity-70"
+                >
+                <Ionicons name="add-circle" size={28} color={PARCHMENT} />
+            </Pressable>
           </View>
         </View>
 
@@ -404,10 +420,12 @@ export default function CommunityScreen() {
                       </Text>
                     </View>
                     <View className="flex-row items-center ml-2">
-                      <Ionicons name="star" size={16} color="#f59e0b" />
-                      <Text className="ml-1" style={{ fontFamily: "SourceSans3_600SemiBold", color: TEXT_PRIMARY_STRONG }}>
-                        {review.rating.toFixed(1)}
-                      </Text>
+                      <Pressable onPress={() => handleProFeature()} className="flex-row items-center">
+                        <Ionicons name="star" size={16} color="#f59e0b" />
+                        <Text className="ml-1" style={{ fontFamily: "SourceSans3_600SemiBold", color: TEXT_PRIMARY_STRONG }}>
+                          {review.rating.toFixed(1)}
+                        </Text>
+                      </Pressable>
                     </View>
                   </View>
                   <Text className="leading-5" numberOfLines={3} style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}>
@@ -426,6 +444,13 @@ export default function CommunityScreen() {
             </View>
           )}
         </View>
+         {!isPro && (
+                <View className="mt-4 p-4 rounded-lg bg-yellow-100 border border-yellow-300">
+                    <Text className="text-center text-yellow-800">
+                        Posting is a Pro feature. Upgrade to join the conversation.
+                    </Text>
+                </View>
+            )}
       </View>
     );
   };

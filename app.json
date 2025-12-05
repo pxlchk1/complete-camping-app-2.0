@@ -3,28 +3,44 @@
     "name": "Complete Camping App",
     "slug": "complete-camping-app",
     "scheme": "tentlantern",
-    "version": "1.0.5",
+    "version": "1.1.1",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/images/splash-screen.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.tentlanternchild.completecampingcompanion",
-      "buildNumber": "120",
+      "buildNumber": "1.1.0",
       "googleServicesFile": "./GoogleService-Info.plist",
       "usesAppleSignIn": true,
       "entitlements": {
-        "com.apple.developer.applesignin": ["Default"]
+        "com.apple.developer.applesignin": [
+          "Default",
+          "Default"
+        ]
       },
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses the camera to take photos of your camping trips, gear, and outdoor adventures.",
         "NSPhotoLibraryUsageDescription": "This app accesses your photo library to select and share photos of your camping experiences.",
-        "NSLocationWhenInUseUsageDescription": "This app uses your location to show you nearby campgrounds, hiking trails, and points of interest."
-      }
+        "NSLocationWhenInUseUsageDescription": "This app uses your location to show you nearby campgrounds, hiking trails, and points of interest.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "appStoreId": "6752673528"
     },
     "android": {
       "edgeToEdgeEnabled": true,
       "package": "com.tentlanternchild.completecampingcompanion"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "587deb41-d7a9-474f-8baf-09024d0a6ef1"
+      }
     }
   }
 }

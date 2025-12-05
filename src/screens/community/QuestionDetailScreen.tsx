@@ -1,3 +1,4 @@
+npx expo start --tunnel -c
 /**
  * Question Detail Screen
  * Shows question with all answers and allows posting new answers
@@ -31,6 +32,8 @@ import {
   TEXT_MUTED,
   EARTH_GREEN,
 } from "../../constants/colors";
+import { isPro } from "../../utils/auth";
+import { usePaywallStore } from "../../state/paywallStore";
 
 type RouteParams = RootStackScreenProps<"QuestionDetail">;
 
@@ -39,6 +42,8 @@ export default function QuestionDetailScreen() {
   const navigation = useNavigation<RouteParams["navigation"]>();
   const { questionId } = route.params;
   const currentUser = useCurrentUser();
+  const proStatus = isPro();
+  const { open: openPaywall } = usePaywallStore();
 
   const [question, setQuestion] = useState<Question | null>(null);
   const [answers, setAnswers] = useState<Answer[]>([]);
@@ -88,6 +93,11 @@ export default function QuestionDetailScreen() {
   const handleUpvoteQuestion = async () => {
     if (!currentUser || !question) return;
 
+    if (!proStatus) {
+        openPaywall("community_interaction", { title: "Upvoting is a Pro feature. Upgrade to join the conversation." });
+        return;
+    }
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
       await upvoteQuestion(questionId);
@@ -99,6 +109,11 @@ export default function QuestionDetailScreen() {
 
   const handleUpvoteAnswer = async (answerId: string) => {
     if (!currentUser) return;
+
+    if (!proStatus) {
+        openPaywall("community_interaction", { title: "Upvoting is a Pro feature. Upgrade to join the conversation." });
+        return;
+    }
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
@@ -113,6 +128,11 @@ export default function QuestionDetailScreen() {
 
   const handleSubmitAnswer = async () => {
     if (!currentUser || !answerText.trim() || submitting) return;
+
+    if (!proStatus) {
+        openPaywall("community_interaction", { title: "Answering is a Pro feature. Upgrade to join the conversation." });
+        return;
+    }
 
     try {
       setSubmitting(true);
@@ -323,14 +343,15 @@ export default function QuestionDetailScreen() {
                   textAlignVertical="top"
                   className="p-4"
                   style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_PRIMARY_STRONG, minHeight: 120 }}
+                  editable={proStatus}
                 />
                 <View className="flex-row justify-end p-3 border-t" style={{ borderColor: BORDER_SOFT }}>
                   <Pressable
                     onPress={handleSubmitAnswer}
-                    disabled={!answerText.trim() || submitting}
+                    disabled={!answerText.trim() || submitting || !proStatus}
                     className="px-6 py-3 rounded-xl active:opacity-90"
                     style={{
-                      backgroundColor: answerText.trim() && !submitting ? DEEP_FOREST : "#d1d5db",
+                      backgroundColor: answerText.trim() && !submitting && proStatus ? DEEP_FOREST : "#d1d5db",
                     }}
                   >
                     {submitting ? (
@@ -342,6 +363,13 @@ export default function QuestionDetailScreen() {
                     )}
                   </Pressable>
                 </View>
+                 {!proStatus && (
+                    <View className="p-2 bg-yellow-100 border-t border-yellow-200">
+                        <Text className="text-center text-yellow-800 text-xs">
+                            Answering questions is a Pro feature.
+                        </Text>
+                    </View>
+                )}
               </View>
             </View>
           )}

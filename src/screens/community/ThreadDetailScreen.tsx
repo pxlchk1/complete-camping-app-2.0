@@ -17,7 +17,9 @@ import { getQuestionById, getAnswers, addAnswer, type Question, type Answer } fr
 import { useAuthStore } from "../../state/authStore";
 import { useToast } from "../../components/ToastManager";
 import { Timestamp } from "firebase/firestore";
-import { DEEP_FOREST, EARTH_GREEN, GRANITE_GOLD, RIVER_ROCK, SIERRA_SKY, PARCHMENT, PARCHMENT_BORDER } from "../../constants/colors";
+import { useProStatus } from "../../utils/auth";
+import { usePaywallStore } from "../../state/paywallStore";
+import { DEEP_FOREST, PARCHMENT, CARD_BACKGROUND_LIGHT, BORDER_SOFT, TEXT_PRIMARY_STRONG, TEXT_SECONDARY, TEXT_MUTED } from "../../constants/colors";
 
 // Helper to convert Timestamp to string
 const toDateString = (date: Timestamp | string): string => {
@@ -32,6 +34,8 @@ export default function ThreadDetailScreen() {
 
   const { user } = useAuthStore();
   const { showError, showSuccess } = useToast();
+  const isPro = useProStatus();
+  const { open: openPaywall } = usePaywallStore();
 
   const [question, setQuestion] = useState<Question | null>(null);
   const [answers, setAnswers] = useState<Answer[]>([]);
@@ -60,6 +64,11 @@ export default function ThreadDetailScreen() {
   }, [questionId]);
 
   const post = async () => {
+    if (!isPro) {
+        openPaywall("community_posting", { title: "Posting is a Pro feature. Upgrade to join the conversation." });
+        return;
+    }
+
     if (!text.trim()) return;
 
     if (!user) {
@@ -79,19 +88,11 @@ export default function ThreadDetailScreen() {
     }
   };
 
-  const formatTimeAgo = (dateString: string) => {
-    const now = new Date();
-    const date = new Date(dateString);
-    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
-
-    if (diffInHours < 1) return "Just now";
-    if (diffInHours < 24) return `${diffInHours}h ago`;
-    const diffInDays = Math.floor(diffInHours / 24);
-    if (diffInDays < 7) return `${diffInDays}d ago`;
-    const diffInWeeks = Math.floor(diffInDays / 7);
-    if (diffInWeeks < 4) return `${diffInWeeks}w ago`;
-    return date.toLocaleDateString();
-  };
+    const handleTextInputFocus = () => {
+        if (!isPro) {
+            openPaywall("community_posting", { title: "Posting is a Pro feature. Upgrade to join the conversation." });
+        }
+    };
 
   if (loading) {
     return (
@@ -110,7 +111,7 @@ export default function ThreadDetailScreen() {
         <ModalHeader title="Thread" showTitle />
         <View className="flex-1 items-center justify-center px-8">
           <Ionicons name="alert-circle-outline" size={64} color="#9ca3af" />
-          <Text className="text-forest-800" style={{ fontFamily: "SourceSans3_600SemiBold" }}>Question not found</Text>
+          <Text style={{ fontFamily: "SourceSans3_600SemiBold", color: TEXT_PRIMARY_STRONG }}>Question not found</Text>
         </View>
       </View>
     );
@@ -124,26 +125,25 @@ export default function ThreadDetailScreen() {
         className="flex-1"
         keyboardVerticalOffset={100}
       >
-        {/* Removed old header - now using ModalHeader */}
         <ScrollView className="flex-1 px-6 py-4" showsVerticalScrollIndicator={false}>
           {/* Question Card */}
-          <View className="bg-cream-50 rounded-xl p-4 mb-6 border border-cream-200">
-            <Text className="text-lg text-forest-800 mb-3" style={{ fontFamily: "JosefinSlab_700Bold" }}>
+          <View style={{ backgroundColor: CARD_BACKGROUND_LIGHT, borderColor: BORDER_SOFT }} className="rounded-xl p-4 mb-6 border">
+            <Text style={{ fontFamily: "JosefinSlab_700Bold", color: TEXT_PRIMARY_STRONG }} className="text-lg mb-3">
               {question.question}
             </Text>
 
             {question.details && (
-              <Text className="text-base text-stone-700 mb-3 leading-6" style={{ fontFamily: "SourceSans3_400Regular" }}>
+              <Text style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY, lineHeight: 24 }} className="text-base mb-3">
                 {question.details}
               </Text>
             )}
 
             {/* Footer */}
-            <View className="flex-row items-center justify-between pt-3 border-t border-cream-200">
-              <Text className="text-sm text-stone-600" style={{ fontFamily: "SourceSans3_400Regular" }}>
+            <View style={{ borderColor: BORDER_SOFT }} className="flex-row items-center justify-between pt-3 border-t">
+              <Text style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED }} className="text-sm">
                 by {question.userId}
               </Text>
-              <Text className="text-sm text-stone-600" style={{ fontFamily: "SourceSans3_400Regular" }}>
+              <Text style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED }} className="text-sm">
                 {question.createdAt?.toDate ? question.createdAt.toDate().toLocaleDateString() : ""}
               </Text>
             </View>
@@ -151,32 +151,32 @@ export default function ThreadDetailScreen() {
 
           {/* Answers Section */}
           <View className="mb-6">
-            <Text className="text-lg text-forest-800 mb-4" style={{ fontFamily: "JosefinSlab_700Bold" }}>
+            <Text style={{ fontFamily: "JosefinSlab_700Bold", color: TEXT_PRIMARY_STRONG }} className="text-lg mb-4">
               {answers.length} {answers.length === 1 ? "Answer" : "Answers"}
             </Text>
 
             {answers.length === 0 ? (
-              <View className="bg-cream-50 rounded-xl p-6 items-center border border-cream-200">
+              <View style={{ backgroundColor: CARD_BACKGROUND_LIGHT, borderColor: BORDER_SOFT }} className="rounded-xl p-6 items-center border">
                 <Ionicons name="chatbubble-outline" size={48} color="#9ca3af" />
-                <Text className="text-stone-600 mt-3" style={{ fontFamily: "SourceSans3_600SemiBold" }}>No answers yet</Text>
-                <Text className="text-stone-500 text-sm mt-1" style={{ fontFamily: "SourceSans3_400Regular" }}>Be the first to help!</Text>
+                <Text style={{ fontFamily: "SourceSans3_600SemiBold", color: TEXT_SECONDARY }} className="mt-3">No answers yet</Text>
+                <Text style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED }} className="text-sm mt-1">Be the first to help!</Text>
               </View>
             ) : (
               <View className="space-y-3">
                 {answers.map((answer) => (
                   <View
                     key={answer.id}
-                    className="rounded-xl p-4 border bg-parchment border-cream-200"
+                    style={{ backgroundColor: PARCHMENT, borderColor: BORDER_SOFT }} className="rounded-xl p-4 border"
                   >
-                    <Text className="text-base text-stone-800 mb-3 leading-6" style={{ fontFamily: "SourceSans3_400Regular" }}>
+                    <Text style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_PRIMARY_STRONG, lineHeight: 24 }} className="text-base mb-3">
                       {answer.text}
                     </Text>
 
-                    <View className="flex-row items-center justify-between pt-3 border-t border-stone-200">
-                      <Text className="text-sm text-stone-600" style={{ fontFamily: "SourceSans3_400Regular" }}>
+                    <View style={{ borderColor: BORDER_SOFT }} className="flex-row items-center justify-between pt-3 border-t">
+                      <Text style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED }} className="text-sm">
                         by {answer.userId}
                       </Text>
-                      <Text className="text-sm text-stone-600" style={{ fontFamily: "SourceSans3_400Regular" }}>
+                      <Text style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED }} className="text-sm">
                         {answer.createdAt?.toDate ? answer.createdAt.toDate().toLocaleDateString() : ""}
                       </Text>
                     </View>
@@ -188,25 +188,31 @@ export default function ThreadDetailScreen() {
         </ScrollView>
 
         {/* Answer Input */}
-        <View className="px-6 py-4 border-t border-cream-200 bg-parchment">
+        <View style={{ borderTopColor: BORDER_SOFT }} className="px-6 py-4 border-t bg-parchment">
           <View className="flex-row items-end">
             <View className="flex-1 mr-3">
               <TextInput
                 value={text}
                 onChangeText={setText}
-                placeholder="Write your answer..."
+                onFocus={handleTextInputFocus}
+                placeholder={isPro ? "Write your answer..." : "Upgrade to Pro to answer"}
                 placeholderTextColor="#9ca3af"
                 multiline
-                className="bg-cream-50 rounded-xl px-4 py-3 text-base text-forest-800 border border-cream-200"
-                style={{ maxHeight: 100, fontFamily: "SourceSans3_400Regular" }}
+                editable={isPro}
+                className="rounded-xl px-4 py-3 text-base border"
+                style={{
+                    backgroundColor: isPro ? CARD_BACKGROUND_LIGHT : BORDER_SOFT,
+                    borderColor: BORDER_SOFT,
+                    color: TEXT_PRIMARY_STRONG,
+                    maxHeight: 100, 
+                    fontFamily: "SourceSans3_400Regular"
+                }}
               />
             </View>
             <Pressable
               onPress={post}
-              disabled={!text.trim() || posting}
-              className={`rounded-full p-3 ${
-                !text.trim() || posting ? "bg-stone-300" : "bg-forest-800 active:bg-forest-900"
-              }`}
+              disabled={!text.trim() || posting || !isPro}
+              className={`rounded-full p-3 ${!text.trim() || posting || !isPro ? "bg-stone-300" : "bg-forest-800 active:bg-forest-900"}`}
             >
               <Ionicons name="send" size={20} color={PARCHMENT} />
             </Pressable>

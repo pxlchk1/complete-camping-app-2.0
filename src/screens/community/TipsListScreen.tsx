@@ -4,14 +4,16 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { View, Text, Pressable, FlatList, ActivityIndicator, TextInput } from "react-native";
+import { View, Text, Pressable, FlatList, ActivityIndicator, TextInput, Image } from "react-native";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { tipsService, TipPost } from "../../services/firestore/tipsService";
+import { tipsService, Tip } from "../../services/firestore/tipsService";
 import { auth } from "../../config/firebase";
 import { RootStackNavigationProp } from "../../navigation/types";
 import CommunitySectionHeader from "../../components/CommunitySectionHeader";
+import { profileService } from "../../services/firestore/profileService";
+import { User } from "../../types/user";
 import {
   DEEP_FOREST,
   EARTH_GREEN,
@@ -30,28 +32,40 @@ export default function TipsListScreen() {
   const navigation = useNavigation<RootStackNavigationProp>();
   const currentUser = auth.currentUser;
 
-  const [tips, setTips] = useState<TipPost[]>([]);
+  const [tips, setTips] = useState<Tip[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortOption>("newest");
   const [searchQuery, setSearchQuery] = useState("");
+  const [hiddenPosts, setHiddenPosts] = useState<string[]>([]);
+  const [authorDetails, setAuthorDetails] = useState<Record<string, User>>({});
+
+  const toggleVisibility = (postId: string) => {
+    setHiddenPosts(prev => 
+      prev.includes(postId) ? prev.filter(id => id !== postId) : [...prev, postId]
+    );
+  };
 
   const loadTips = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      let allTips: TipPost[];
+      let allTips: Tip[];
 
       if (sortBy === "my" && currentUser) {
-        // Filter tips by current user
         const allTipsData = await tipsService.getTips();
-        allTips = allTipsData.filter(tip => tip.userId === currentUser.uid);
+        allTips = allTipsData.filter(tip => tip.authorId === currentUser.uid);
       } else {
         allTips = await tipsService.getTips();
       }
 
       setTips(allTips);
+
+      const authorIds = [...new Set(allTips.map(p => p.authorId))];
+      const profiles = await profileService.getMultipleUserProfiles(authorIds);
+      setAuthorDetails(profiles);
+
     } catch (err: any) {
       setError(err.message || "Failed to load tips");
     } finally {
@@ -75,11 +89,40 @@ export default function TipsListScreen() {
 
   const handleCreateTip = () => {
     if (!currentUser) {
-      // TODO: Show auth dialog
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     navigation.navigate("CreateTip");
+  };
+  
+  const handleVote = async (postId: string, type: 'up' | 'down') => {
+    if (!currentUser) return;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      await tipsService.voteTip(postId, type);
+      setTips(prev =>
+        prev.map(p => {
+          if (p.id === postId) {
+            const currentVote = p.userVotes && p.userVotes[currentUser.uid];
+            let newUpvotes = p.upvotes;
+
+            if (currentVote === type) { 
+              newUpvotes = type === 'up' ? p.upvotes - 1 : p.upvotes + 1;
+            } else if (currentVote) { 
+              newUpvotes = type === 'up' ? p.upvotes + 2 : p.upvotes - 2;
+            } else { 
+              newUpvotes = type === 'up' ? p.upvotes + 1 : p.upvotes - 1;
+            }
+            
+            return { ...p, upvotes: newUpvotes };
+          }
+          return p;
+        })
+      );
+    } catch (err) {
+      loadTips(); 
+    }
   };
 
   const formatTimeAgo = (dateString: string | any) => {
@@ -102,11 +145,16 @@ export default function TipsListScreen() {
   const filteredTips = searchQuery
     ? tips.filter(tip =>
         tip.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        tip.content.toLowerCase().includes(searchQuery.toLowerCase())
+        tip.body.toLowerCase().includes(searchQuery.toLowerCase())
       )
     : tips;
 
-  const renderTip = ({ item }: { item: TipPost }) => (
+  const renderTip = ({ item }: { item: Tip }) => {
+    const userVote = currentUser && item.userVotes ? item.userVotes[currentUser.uid] : null;
+    const isHidden = item.upvotes <= -5 && !hiddenPosts.includes(item.id);
+    const author = authorDetails[item.authorId];
+    
+    return (
     <Pressable
       onPress={() => handleTipPress(item.id)}
       className="rounded-xl p-4 mb-3 border active:opacity-90"
@@ -118,21 +166,64 @@ export default function TipsListScreen() {
       >
         {item.title}
       </Text>
-      <Text
-        className="mb-3"
-        numberOfLines={2}
-        style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}
-      >
-        {item.content}
-      </Text>
-
-      <View className="flex-row items-center">
-        <Text className="text-xs" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED }}>
-          by {item.userName} • {formatTimeAgo(item.createdAt)} • {item.upvotes} upvotes
+      {isHidden ? (
+        <Pressable onPress={() => toggleVisibility(item.id)} className="py-4 items-center bg-gray-100 rounded-md">
+          <Text style={{ fontFamily: "SourceSans3_600SemiBold", color: TEXT_SECONDARY }}>Content hidden due to downvotes</Text>
+          <Text style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED, marginTop: 4 }}>Tap to show</Text>
+        </Pressable>
+      ) : (
+        <Text
+          className="mb-3"
+          numberOfLines={2}
+          style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}
+        >
+          {item.body}
         </Text>
+      )}
+
+      <View className="flex-row items-center justify-between">
+        <View className="flex-row items-center">
+          <Image source={{ uri: author?.photoURL }} className="w-6 h-6 rounded-full mr-2" />
+          <Text className="text-xs" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED }}>
+            @{author?.handle} • {formatTimeAgo(item.createdAt)}
+          </Text>
+        </View>
+        <View className="flex-row items-center">
+            <Pressable
+              onPress={(e) => {
+                e.stopPropagation();
+                handleVote(item.id, 'up');
+              }}
+              className="px-2 py-1"
+            >
+              <Ionicons 
+                name={userVote === 'up' ? "arrow-up-circle" : "arrow-up-circle-outline"} 
+                size={20} 
+                color={userVote === 'up' ? EARTH_GREEN : TEXT_MUTED} 
+              />
+            </Pressable>
+            
+            <Text style={{ fontFamily: "SourceSans3_600SemiBold", color: TEXT_PRIMARY_STRONG, minWidth: 20, textAlign: 'center' }}>
+              {item.upvotes}
+            </Text>
+
+            <Pressable
+              onPress={(e) => {
+                e.stopPropagation();
+                handleVote(item.id, 'down');
+              }}
+              className="px-2 py-1"
+            >
+              <Ionicons 
+                name={userVote === 'down' ? "arrow-down-circle" : "arrow-down-circle-outline"} 
+                size={20} 
+                color={userVote === 'down' ? '#ef4444' : TEXT_MUTED} 
+              />
+            </Pressable>
+          </View>
       </View>
     </Pressable>
-  );
+  )};
 
   if (loading) {
     return (

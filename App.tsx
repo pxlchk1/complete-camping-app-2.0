@@ -13,7 +13,7 @@ import {
   SourceSans3_700Bold,
 } from "@expo-google-fonts/source-sans-3";
 import { Satisfy_400Regular } from "@expo-google-fonts/satisfy";
-import RootNavigator from "./src/navigation/RootNavigator";
+import { RootNavigator } from "./src/navigation";
 import { ToastProvider } from "./src/components/ToastManager";
 import { FireflyTimeProvider } from "./src/context/FireflyTimeContext";
 import { View, Text } from "react-native";

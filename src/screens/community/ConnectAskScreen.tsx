@@ -9,6 +9,8 @@ import { useToast } from "../../components/ToastManager";
 import * as Haptics from "expo-haptics";
 import { Timestamp } from "firebase/firestore";
 import { DEEP_FOREST, EARTH_GREEN, GRANITE_GOLD, RIVER_ROCK, SIERRA_SKY, PARCHMENT, PARCHMENT_BORDER, CARD_BACKGROUND_LIGHT, BORDER_SOFT, TEXT_PRIMARY_STRONG, TEXT_SECONDARY, TEXT_MUTED } from "../../constants/colors";
+import { useProStatus } from "../../utils/auth";
+import { usePaywallStore } from "../../state/paywallStore";
 
 // Helper to convert Timestamp to string
 const toDateString = (date: Timestamp | string): string => {
@@ -20,6 +22,8 @@ export default function ConnectAskScreen() {
   const navigation = useNavigation<RootStackNavigationProp>();
   const { user } = useAuthStore();
   const { showError } = useToast();
+  const isPro = useProStatus();
+  const { open: openPaywall } = usePaywallStore();
 
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -54,6 +58,14 @@ export default function ConnectAskScreen() {
       }
     }, [user])
   );
+
+  const handleAddQuestion = () => {
+    if (isPro) {
+        navigation.navigate("CreateQuestion")
+    } else {
+        openPaywall("community_posting", { title: "Posting is a Pro feature. Upgrade to join the conversation." });
+    }
+  }
 
   const filteredQuestions = searchQuery.trim()
     ? questions.filter(
@@ -104,12 +116,7 @@ export default function ConnectAskScreen() {
             </View>
           </View>
           <Pressable
-            onPress={() => {
-              if (!user) {
-                return;
-              }
-              navigation.navigate("CreateQuestion");
-            }}
+            onPress={handleAddQuestion}
             className="active:opacity-70"
           >
             <Ionicons name="add-circle" size={28} color={PARCHMENT} />
@@ -190,6 +197,13 @@ export default function ConnectAskScreen() {
         />
       )}
       </View>
+      {!isPro && (
+        <View className="p-4 bg-yellow-100 border-t border-yellow-300">
+            <Text className="text-center text-yellow-800">
+                Posting is a Pro feature. Upgrade to join the conversation.
+            </Text>
+        </View>
+        )}
     </View>
   );
 }

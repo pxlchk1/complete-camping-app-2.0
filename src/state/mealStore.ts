@@ -4,9 +4,11 @@
  */
 
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { createJSONStorage, persist, StateStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { MealLibraryItem, MealCategory, PrepType, Difficulty } from "../types/meal";
+import { useProStatus } from "../utils/auth";
+import { usePaywallStore } from "./paywallStore";
 
 interface MealState {
   // Meal library with pre-populated camping meals
@@ -25,6 +27,29 @@ interface MealState {
   addCustomMeal: (meal: Omit<MealLibraryItem, "id" | "createdAt">) => void;
   initializeMealLibrary: () => void;
 }
+
+const proStorage: StateStorage = {
+  getItem: (name) => {
+    const isPro = useProStatus.getState().isPro;
+    if (isPro) {
+      return AsyncStorage.getItem(name);
+    }
+    return null;
+  },
+  setItem: (name, value) => {
+    const isPro = useProStatus.getState().isPro;
+    if (isPro) {
+      return AsyncStorage.setItem(name, value);
+    }
+    usePaywallStore.getState().open('offline_mode', { title: 'Offline Mode is a Pro feature. Upgrade to save your data for offline use.' });
+  },
+  removeItem: (name) => {
+    const isPro = useProStatus.getState().isPro;
+    if (isPro) {
+      return AsyncStorage.removeItem(name);
+    }
+  },
+};
 
 // Pre-populated meal library based on camping meal suggestions
 const INITIAL_MEAL_LIBRARY: Omit<MealLibraryItem, "id" | "createdAt">[] = [
@@ -201,7 +226,7 @@ export const useMealStore = create<MealState>()(
     }),
     {
       name: "meal-storage",
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => proStorage),
     }
   )
 );

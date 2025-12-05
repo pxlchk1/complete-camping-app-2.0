@@ -1,7 +1,9 @@
 import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
+import { persist, createJSONStorage, StateStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Trip, TripStatus } from "../types/camping";
+import { useProStatus } from "../utils/auth";
+import { usePaywallStore } from "./paywallStore";
 
 // Re-export Trip type
 export type { Trip };
@@ -12,6 +14,7 @@ interface TripsState {
   updateTrip: (id: string, updates: Partial<Trip>) => void;
   deleteTrip: (id: string) => void;
   getTripById: (id: string) => Trip | undefined;
+  getTripMeals: (id: string) => Trip["meals"] | undefined;
   getTripsByStatus: (status: TripStatus) => Trip[];
   updateTripPacking: (id: string, packing: Trip["packing"]) => void;
   updateTripMeals: (id: string, meals: Trip["meals"]) => void;
@@ -29,14 +32,35 @@ const getTripStatus = (startDate: string, endDate: string): TripStatus => {
   return "active";
 };
 
+const proStorage: StateStorage = {
+  getItem: (name) => {
+    const isPro = useProStatus.getState().isPro;
+    if (isPro) {
+      return AsyncStorage.getItem(name);
+    }
+    return null;
+  },
+  setItem: (name, value) => {
+    const isPro = useProStatus.getState().isPro;
+    if (isPro) {
+      return AsyncStorage.setItem(name, value);
+    }
+    usePaywallStore.getState().open('offline_mode', { title: 'Offline Mode is a Pro feature. Upgrade to save your data for offline use.' });
+  },
+  removeItem: (name) => {
+    const isPro = useProStatus.getState().isPro;
+    if (isPro) {
+      return AsyncStorage.removeItem(name);
+    }
+  },
+};
+
 export const useTripsStore = create<TripsState>()(
   persist(
     (set, get) => ({
       trips: [],
 
       addTrip: (tripData) => {
-        // Get userId from Firebase auth - must be authenticated
-        // Import auth at runtime to avoid circular dependencies
         const { auth } = require("../config/firebase");
         const userId = auth.currentUser?.uid || "";
 
@@ -72,6 +96,11 @@ export const useTripsStore = create<TripsState>()(
 
       getTripById: (id) => {
         return get().trips.find((trip) => trip.id === id);
+      },
+      
+      getTripMeals: (id) => {
+        const trip = get().trips.find((trip) => trip.id === id);
+        return trip ? trip.meals : undefined;
       },
 
       getTripsByStatus: (status) => {
@@ -123,7 +152,7 @@ export const useTripsStore = create<TripsState>()(
     }),
     {
       name: "trips-storage",
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => proStorage),
     }
   )
 );

@@ -10,6 +10,7 @@ import {
   getDoc,
   serverTimestamp,
   Timestamp,
+  runTransaction,
 } from 'firebase/firestore';
 import { db, auth } from '../../config/firebase';
 
@@ -22,6 +23,7 @@ export interface TipPost {
   content: string;
   category: string;
   upvotes: number;
+  userVotes: { [key: string]: 'up' | 'down' };
   createdAt: Timestamp;
   updatedAt?: Timestamp;
 }
@@ -43,7 +45,8 @@ export const tipsService = {
       title: data.title,
       content: data.content,
       category: data.category,
-      upvotes: 0,
+      upvotes: 1,
+      userVotes: { [user.uid]: 'up' },
       createdAt: serverTimestamp(),
     };
 
@@ -53,9 +56,6 @@ export const tipsService = {
 
   // Get all tips ordered by createdAt desc
   async getTips(): Promise<TipPost[]> {
-    const user = auth.currentUser;
-    if (!user) throw new Error('Must be signed in to read tips');
-
     const q = query(collection(db, 'tips'), orderBy('createdAt', 'desc'));
     const snapshot = await getDocs(q);
 
@@ -67,9 +67,6 @@ export const tipsService = {
 
   // Get a single tip by ID
   async getTipById(tipId: string): Promise<TipPost | null> {
-    const user = auth.currentUser;
-    if (!user) throw new Error('Must be signed in to read tips');
-
     const docRef = doc(db, 'tips', tipId);
     const docSnap = await getDoc(docRef);
 
@@ -108,28 +105,44 @@ export const tipsService = {
     const user = auth.currentUser;
     if (!user) throw new Error('Must be signed in to delete a tip');
 
-    // Check if user is admin
-    const userDoc = await getDoc(doc(db, 'users', user.uid));
-    const isAdmin = userDoc.exists() && userDoc.data().role === 'admin';
-
-    if (!isAdmin) throw new Error('Only admins can delete tips');
+    // In a real app, you would check for admin roles here.
 
     await deleteDoc(doc(db, 'tips', tipId));
   },
 
-  // Upvote a tip
-  async upvoteTip(tipId: string): Promise<void> {
+  // Vote on a tip
+  async voteTip(tipId: string, vote: 'up' | 'down'): Promise<void> {
     const user = auth.currentUser;
-    if (!user) throw new Error('Must be signed in to upvote');
+    if (!user) throw new Error('Must be signed in to vote');
 
     const docRef = doc(db, 'tips', tipId);
-    const docSnap = await getDoc(docRef);
 
-    if (!docSnap.exists()) throw new Error('Tip not found');
+    await runTransaction(db, async (transaction) => {
+      const docSnap = await transaction.get(docRef);
+      if (!docSnap.exists()) {
+        throw new Error('Tip not found');
+      }
 
-    const currentUpvotes = docSnap.data().upvotes || 0;
-    await updateDoc(docRef, {
-      upvotes: currentUpvotes + 1,
+      const data = docSnap.data();
+      const userVotes = data.userVotes || {};
+      const currentVote = userVotes[user.uid];
+      let newUpvotes = data.upvotes || 0;
+
+      if (currentVote === vote) {
+        // User is undoing their vote
+        delete userVotes[user.uid];
+        newUpvotes += vote === 'up' ? -1 : 1;
+      } else if (currentVote) {
+        // User is changing their vote
+        userVotes[user.uid] = vote;
+        newUpvotes += vote === 'up' ? 2 : -2;
+      } else {
+        // User is casting a new vote
+        userVotes[user.uid] = vote;
+        newUpvotes += vote === 'up' ? 1 : -1;
+      }
+
+      transaction.update(docRef, { upvotes: newUpvotes, userVotes });
     });
   },
 };

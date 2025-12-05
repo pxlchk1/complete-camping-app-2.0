@@ -4,15 +4,16 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { View, Text, Pressable, FlatList, ActivityIndicator, TextInput } from "react-native";
+import { View, Text, Pressable, FlatList, ActivityIndicator, TextInput, Image } from "react-native";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { getQuestions } from "../../services/questionsService";
-import { Question } from "../../types/community";
+import { questionsService, Question } from "../../services/firestore/questionsService";
 import { useCurrentUser } from "../../state/userStore";
 import { RootStackNavigationProp } from "../../navigation/types";
 import CommunitySectionHeader from "../../components/CommunitySectionHeader";
+import { profileService } from "../../services/firestore/profileService";
+import { User } from "../../types/user";
 import {
   DEEP_FOREST,
   EARTH_GREEN,
@@ -40,6 +41,14 @@ export default function QuestionsListScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [hiddenPosts, setHiddenPosts] = useState<string[]>([]);
+  const [authorDetails, setAuthorDetails] = useState<Record<string, User>>({});
+
+  const toggleVisibility = (postId: string) => {
+    setHiddenPosts(prev => 
+      prev.includes(postId) ? prev.filter(id => id !== postId) : [...prev, postId]
+    );
+  };
 
   const loadQuestions = async (refresh = false) => {
     try {
@@ -52,26 +61,63 @@ export default function QuestionsListScreen() {
 
       setError(null);
 
-      const result = await getQuestions(
+      const result = await questionsService.getQuestions(
         filterBy,
         undefined,
         20,
         refresh ? undefined : lastDoc || undefined
       );
 
+      let allQuestions: Question[];
       if (refresh) {
-        setQuestions(result.questions);
+        allQuestions = result.questions;
       } else {
-        setQuestions(prev => [...prev, ...result.questions]);
+        allQuestions = [...questions, ...result.questions];
       }
+      setQuestions(allQuestions);
 
       setLastDoc(result.lastDoc);
       setHasMore(result.questions.length === 20);
+
+      const authorIds = [...new Set(allQuestions.map(p => p.authorId))];
+      const profiles = await profileService.getMultipleUserProfiles(authorIds);
+      setAuthorDetails(profiles);
+
     } catch (err: any) {
       setError(err.message || "Failed to load questions");
     } finally {
       setLoading(false);
       setLoadingMore(false);
+    }
+  };
+
+  const handleVote = async (postId: string, type: 'up' | 'down') => {
+    if (!currentUser) return;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      await questionsService.voteQuestion(postId, type);
+      setQuestions(prev =>
+        prev.map(p => {
+          if (p.id === postId) {
+            const currentVote = p.userVotes && p.userVotes[currentUser.uid];
+            let newUpvotes = p.upvotes;
+
+            if (currentVote === type) { 
+              newUpvotes = type === 'up' ? p.upvotes - 1 : p.upvotes + 1;
+            } else if (currentVote) { 
+              newUpvotes = type === 'up' ? p.upvotes + 2 : p.upvotes - 2;
+            } else { 
+              newUpvotes = type === 'up' ? p.upvotes + 1 : p.upvotes - 1;
+            }
+            
+            return { ...p, upvotes: newUpvotes };
+          }
+          return p;
+        })
+      );
+    } catch (err) {
+      loadQuestions(); 
     }
   };
 
@@ -98,7 +144,6 @@ export default function QuestionsListScreen() {
 
   const handleAskQuestion = () => {
     if (!currentUser) {
-      // TODO: Show auth dialog
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -129,7 +174,12 @@ export default function QuestionsListScreen() {
       )
     : questions;
 
-  const renderQuestion = ({ item }: { item: Question }) => (
+  const renderQuestion = ({ item }: { item: Question }) => {
+    const userVote = currentUser && item.userVotes ? item.userVotes[currentUser.uid] : null;
+    const isHidden = item.upvotes <= -5 && !hiddenPosts.includes(item.id);
+    const author = authorDetails[item.authorId];
+
+    return (
     <Pressable
       onPress={() => handleQuestionPress(item.id)}
       className="rounded-xl p-4 mb-3 border active:opacity-90"
@@ -149,15 +199,22 @@ export default function QuestionsListScreen() {
         )}
       </View>
 
-      <Text
-        className="mb-3"
-        numberOfLines={2}
-        style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}
-      >
-        {item.body}
-      </Text>
+      {isHidden ? (
+        <Pressable onPress={() => toggleVisibility(item.id)} className="py-4 items-center bg-gray-100 rounded-md">
+          <Text style={{ fontFamily: "SourceSans3_600SemiBold", color: TEXT_SECONDARY }}>Content hidden due to downvotes</Text>
+          <Text style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED, marginTop: 4 }}>Tap to show</Text>
+        </Pressable>
+      ) : (
+        <Text
+          className="mb-3"
+          numberOfLines={2}
+          style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}
+        >
+          {item.body}
+        </Text>
+      )}
 
-      {item.tags && item.tags.length > 0 && (
+      {item.tags && item.tags.length > 0 && !isHidden && (
         <View className="flex-row flex-wrap gap-1 mb-3">
           {item.tags.slice(0, 3).map((tag, idx) => (
             <View key={idx} className="px-2 py-1 rounded-full bg-blue-100">
@@ -173,15 +230,45 @@ export default function QuestionsListScreen() {
       )}
 
       <View className="flex-row items-center justify-between">
-        <Text className="text-xs" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED }}>
-          by @{item.authorHandle} • {formatTimeAgo(item.createdAt)}
-        </Text>
+        <View className="flex-row items-center">
+          <Image source={{ uri: author?.photoURL }} className="w-6 h-6 rounded-full mr-2" />
+          <Text className="text-xs" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED }}>
+            @{author?.handle} • {formatTimeAgo(item.createdAt)}
+          </Text>
+        </View>
         <View className="flex-row items-center gap-3">
-          <View className="flex-row items-center">
-            <Ionicons name="arrow-up-circle-outline" size={16} color={TEXT_MUTED} />
-            <Text className="text-xs ml-1" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED }}>
+        <View className="flex-row items-center">
+            <Pressable
+              onPress={(e) => {
+                e.stopPropagation();
+                handleVote(item.id, 'up');
+              }}
+              className="px-2 py-1"
+            >
+              <Ionicons 
+                name={userVote === 'up' ? "arrow-up-circle" : "arrow-up-circle-outline"} 
+                size={20} 
+                color={userVote === 'up' ? EARTH_GREEN : TEXT_MUTED} 
+              />
+            </Pressable>
+            
+            <Text style={{ fontFamily: "SourceSans3_600SemiBold", color: TEXT_PRIMARY_STRONG, minWidth: 20, textAlign: 'center' }}>
               {item.upvotes}
             </Text>
+
+            <Pressable
+              onPress={(e) => {
+                e.stopPropagation();
+                handleVote(item.id, 'down');
+              }}
+              className="px-2 py-1"
+            >
+              <Ionicons 
+                name={userVote === 'down' ? "arrow-down-circle" : "arrow-down-circle-outline"} 
+                size={20} 
+                color={userVote === 'down' ? '#ef4444' : TEXT_MUTED} 
+              />
+            </Pressable>
           </View>
           <View className="flex-row items-center">
             <Ionicons name="chatbubble-outline" size={16} color={TEXT_MUTED} />
@@ -192,7 +279,7 @@ export default function QuestionsListScreen() {
         </View>
       </View>
     </Pressable>
-  );
+  )};
 
   if (loading) {
     return (

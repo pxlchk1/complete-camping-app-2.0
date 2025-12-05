@@ -34,12 +34,16 @@ import {
   TEXT_SECONDARY,
   TEXT_MUTED,
 } from "../../constants/colors";
+import { isPro } from "../../utils/auth";
+import { usePaywallStore } from "../../state/paywallStore";
 
 export default function TipDetailScreen() {
   const route = useRoute<RouteProp<RootStackParamList, "TipDetail">>();
   const navigation = useNavigation<RootStackNavigationProp>();
   const { tipId } = route.params;
   const currentUser = useCurrentUser();
+  const proStatus = isPro();
+  const { open: openPaywall } = usePaywallStore();
 
   const [tip, setTip] = useState<Tip | null>(null);
   const [comments, setComments] = useState<TipComment[]>([]);
@@ -81,6 +85,11 @@ export default function TipDetailScreen() {
       return;
     }
 
+    if (!proStatus) {
+      openPaywall("community_interaction", { title: "Upvoting is a Pro feature. Upgrade to join the conversation." });
+      return;
+    }
+
     try {
       await upvoteTip(tipId);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -96,6 +105,11 @@ export default function TipDetailScreen() {
   const handleAddComment = async () => {
     if (!currentUser) {
       Alert.alert("Sign In Required", "Please sign in to comment");
+      return;
+    }
+
+    if (!proStatus) {
+      openPaywall("community_interaction", { title: "Commenting is a Pro feature. Upgrade to join the conversation." });
       return;
     }
 
@@ -322,13 +336,14 @@ export default function TipDetailScreen() {
                 fontFamily: "SourceSans3_400Regular",
                 color: TEXT_PRIMARY_STRONG,
               }}
+              editable={proStatus}
             />
             <Pressable
               onPress={handleAddComment}
-              disabled={!commentText.trim() || submitting}
+              disabled={!commentText.trim() || submitting || !proStatus}
               className="p-3 rounded-full active:opacity-70"
               style={{
-                backgroundColor: commentText.trim() ? DEEP_FOREST : BORDER_SOFT,
+                backgroundColor: commentText.trim() && proStatus ? DEEP_FOREST : BORDER_SOFT,
               }}
             >
               {submitting ? (
@@ -338,6 +353,13 @@ export default function TipDetailScreen() {
               )}
             </Pressable>
           </View>
+           {!proStatus && (
+                <View className="mt-2">
+                    <Text className="text-center text-yellow-800 text-xs">
+                        Commenting is a Pro feature.
+                    </Text>
+                </View>
+            )}
         </View>
       </KeyboardAvoidingView>
     </View>

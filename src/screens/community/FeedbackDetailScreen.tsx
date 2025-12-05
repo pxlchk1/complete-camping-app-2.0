@@ -29,6 +29,8 @@ import {
   TEXT_MUTED,
   EARTH_GREEN,
 } from "../../constants/colors";
+import { isPro } from "../../utils/auth";
+import { usePaywallStore } from "../../state/paywallStore";
 
 type RouteParams = RootStackScreenProps<"FeedbackDetail">;
 
@@ -37,6 +39,8 @@ export default function FeedbackDetailScreen() {
   const navigation = useNavigation<RouteParams["navigation"]>();
   const { postId } = route.params;
   const currentUser = useCurrentUser();
+  const proStatus = isPro();
+  const { open: openPaywall } = usePaywallStore();
 
   const [post, setPost] = useState<FeedbackPost | null>(null);
   const [comments, setComments] = useState<FeedbackComment[]>([]);
@@ -83,6 +87,11 @@ export default function FeedbackDetailScreen() {
   const handleUpvote = async () => {
     if (!currentUser || !post) return;
 
+    if (!proStatus) {
+        openPaywall("community_interaction", { title: "Upvoting is a Pro feature. Upgrade to join the conversation." });
+        return;
+    }
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
       await upvoteFeedbackPost(postId);
@@ -94,6 +103,11 @@ export default function FeedbackDetailScreen() {
 
   const handleSubmitComment = async () => {
     if (!currentUser || !commentText.trim() || submitting) return;
+
+    if (!proStatus) {
+        openPaywall("community_interaction", { title: "Commenting is a Pro feature. Upgrade to join the conversation." });
+        return;
+    }
 
     try {
       setSubmitting(true);
@@ -316,14 +330,15 @@ export default function FeedbackDetailScreen() {
                   textAlignVertical="top"
                   className="p-4"
                   style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_PRIMARY_STRONG, minHeight: 100 }}
+                  editable={proStatus}
                 />
                 <View className="flex-row justify-end p-3 border-t" style={{ borderColor: BORDER_SOFT }}>
                   <Pressable
                     onPress={handleSubmitComment}
-                    disabled={!commentText.trim() || submitting}
+                    disabled={!commentText.trim() || submitting || !proStatus}
                     className="px-6 py-3 rounded-xl active:opacity-90"
                     style={{
-                      backgroundColor: commentText.trim() && !submitting ? DEEP_FOREST : "#d1d5db",
+                      backgroundColor: commentText.trim() && !submitting && proStatus ? DEEP_FOREST : "#d1d5db",
                     }}
                   >
                     {submitting ? (
@@ -335,6 +350,13 @@ export default function FeedbackDetailScreen() {
                     )}
                   </Pressable>
                 </View>
+                {!proStatus && (
+                    <View className="p-2 bg-yellow-100 border-t border-yellow-200">
+                        <Text className="text-center text-yellow-800 text-xs">
+                            Commenting is a Pro feature.
+                        </Text>
+                    </View>
+                )}
               </View>
             </View>
           )}
