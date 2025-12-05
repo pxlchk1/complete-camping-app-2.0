@@ -51,6 +51,10 @@
     "tailwind-merge": "^2.3.0",
     "tailwindcss": "3.3.2",
     "zeego": "3.0.6",
+    "@react-native-menu/menu": "1.2.2",
+    "react-native-ios-context-menu": "3.1.0",
+    "react-native-ios-utilities": "5.1.2",
+    "@dominicstop/ts-event-emitter": "1.1.0",
     "zustand": "^4.5.2"
   },
   "devDependencies": {
