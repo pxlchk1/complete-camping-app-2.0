@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-type PaywallType = "community_full" | "premium_feature" | "trial_expired";
+type PaywallType = "community_full" | "premium_feature" | "trial_expired" | "ai_assistant" | "offline_mode" | "community_posting" | "community_interaction";
 
 interface PaywallContext {
   name: string;

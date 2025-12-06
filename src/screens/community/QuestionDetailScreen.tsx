@@ -1,4 +1,3 @@
-npx expo start --tunnel -c
 /**
  * Question Detail Screen
  * Shows question with all answers and allows posting new answers

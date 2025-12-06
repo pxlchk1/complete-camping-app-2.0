@@ -8,7 +8,7 @@ import { View, Text, Pressable, FlatList, ActivityIndicator, TextInput, Image } 
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { tipsService, Tip } from "../../services/firestore/tipsService";
+import { tipsService, TipPost as Tip } from "../../services/firestore/tipsService";
 import { auth } from "../../config/firebase";
 import { RootStackNavigationProp } from "../../navigation/types";
 import CommunitySectionHeader from "../../components/CommunitySectionHeader";

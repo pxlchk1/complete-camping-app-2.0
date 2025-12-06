@@ -4,3 +4,7 @@ export function isPro(): boolean {
   const currentUser = useCurrentUser();
   return currentUser?.membershipTier === "pro";
 }
+
+export function useProStatus() {
+  return isPro();
+}

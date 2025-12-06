@@ -13,6 +13,31 @@
       "backgroundColor": "#ffffff"
     },
     "newArchEnabled": false,
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static"
+          },
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ],
+      [
+        "expo-haptics"
+      ],
+      [
+        "expo-location"
+      ],
+      [
+        "expo-image-picker"
+      ],
+      [
+        "expo-apple-authentication"
+      ]
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.tentlanternchild.completecampingcompanion",
@@ -28,13 +53,21 @@
         "NSCameraUsageDescription": "This app uses the camera to take photos of your camping trips, gear, and outdoor adventures.",
         "NSPhotoLibraryUsageDescription": "This app accesses your photo library to select and share photos of your camping experiences.",
         "NSLocationWhenInUseUsageDescription": "This app uses your location to show you nearby campgrounds, hiking trails, and points of interest.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "This app uses your location to show you nearby campgrounds and hiking trails.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "appStoreId": "6752673528"
     },
     "android": {
       "edgeToEdgeEnabled": true,
-      "package": "com.tentlanternchild.completecampingcompanion"
+      "package": "com.tentlanternchild.completecampingcompanion",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
+      ]
     },
     "extra": {
       "eas": {

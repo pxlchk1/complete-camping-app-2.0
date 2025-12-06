@@ -1,4 +1,4 @@
-s/**
+/**
  * Community / Connect Firestore Types
  * Based on existing Firestore collections - DO NOT rename collections
  */

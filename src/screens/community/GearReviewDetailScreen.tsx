@@ -320,7 +320,7 @@ export default function GearReviewDetailScreen() {
               }}
             >
               Tags
-            </T>
+            </Text>
             <View className="flex-row flex-wrap gap-2">
               {review.tags.map((tag) => (
                 <View

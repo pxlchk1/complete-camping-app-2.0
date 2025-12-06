@@ -1,4 +1,4 @@
-s/**
+/**
  * Meals Screen - Toggle between two views
  * 1. Meal Planner - Plan meals for active trips
  * 2. Meal Ideas - Browse and add recipes to trips
@@ -36,6 +36,7 @@ import * as Haptics from "expo-haptics";
 import { collection, getDocs, query, orderBy } from "firebase/firestore";
 import { db } from "../config/firebase";
 import * as LocalMealService from "../services/localMealService";
+import { useMealStore } from "../state/mealStore";
 
 type PlanTab = "trips" | "parks" | "weather" | "packing" | "meals";
 type MealsScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -128,7 +129,6 @@ export default function MealsScreen({ onTabChange }: MealsScreenProps) {
   };
 
   const loadLocalRecipes = () => {
-    const { useMealStore } = require("../state/mealStore");
     const state = useMealStore.getState();
 
     if (state.mealLibrary.length === 0) {
@@ -236,7 +236,6 @@ export default function MealsScreen({ onTabChange }: MealsScreenProps) {
     instructions?: string;
     tags?: string[];
   }) => {
-    const { useMealStore } = require("../state/mealStore");
     const addCustomMeal = useMealStore.getState().addCustomMeal;
 
     addCustomMeal(mealData);

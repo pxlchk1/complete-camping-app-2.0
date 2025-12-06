@@ -1,9 +1,9 @@
 
 import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
-import { firestore } from "../../config/firebase";
+import { db } from "../../config/firebase";
 import { User } from "../../types/user";
 
-const db = firestore;
+
 
 export const profileService = {
   async getUserProfile(userId: string): Promise<User | null> {
